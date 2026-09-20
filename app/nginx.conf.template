@@ -1,0 +1,13 @@
+# The bench is static; the one dynamic thing is /lab-config.json, rendered
+# from the container's environment at start, so the same image serves the
+# lab origin and the hostile origin and each page learns which it is.
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    location = /lab-config.json {
+        default_type application/json;
+        add_header Cache-Control "no-store";
+        return 200 '{"labUrl":"${LAB_URL}","hostileUrl":"${LAB_HOSTILE_URL}","baseUrl":"${LAB_API_URL}","anonKey":"${GROBASE_ANON_KEY}","tenantKey":"${GROBASE_TENANT_KEY}","wafHost":"${WAF_HOST}"}';
+    }
+    location / { try_files $uri /index.html; }
+}

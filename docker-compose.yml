@@ -1,0 +1,81 @@
+# Laboratory -- everything runs in Docker, nothing on the host.
+#
+#   tailscale  the lab's own tailnet device (kernel tun; rootless Docker can
+#              hand one out because /dev/net/tun is 0666 and the container
+#              gets NET_ADMIN inside its user namespace)
+#   relay      nginx in the sidecar's network namespace: localhost:5174 ->
+#              https://$WAF_HOST:$WAF_PORT over the tailnet, WebSocket
+#              upgrade kept, Origin passed through untouched so CORS is real
+#   lab        the bench UI, http://localhost:5180 (5173 is QEMU's forward)
+#   hostile    the same image on :5181 -- an origin Kong must refuse
+#   e2e        Playwright, profile "e2e", host network so it sees the same
+#              loopback ports a person does
+name: laboratory
+services:
+  tailscale:
+    image: tailscale/tailscale:v1.102.4
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?copy .env.example to .env}
+      TS_HOSTNAME: ${LAB_NODE:-laboratory}
+      TS_USERSPACE: "false"
+      TS_ACCEPT_DNS: "true"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:-}
+    devices: ["/dev/net/tun:/dev/net/tun"]
+    cap_add: [NET_ADMIN]
+    volumes: ["ts-state:/var/lib/tailscale"]
+    ports: ["127.0.0.1:${LAB_API_PORT:-5174}:5174"]
+    healthcheck:
+      test: ["CMD", "tailscale", "status", "--peers=false"]
+      interval: 5s
+      timeout: 4s
+      retries: 24
+    restart: unless-stopped
+  relay:
+    image: nginx:1.27-alpine
+    network_mode: "service:tailscale"
+    depends_on:
+      tailscale: { condition: service_healthy }
+    environment:
+      WAF_HOST: ${WAF_HOST:?copy .env.example to .env}
+      WAF_PORT: ${WAF_PORT:-8443}
+    volumes:
+      - ./relay/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./relay/tls.conf:/etc/nginx/lab-tls.conf:ro
+      - ./certs:/certs:ro
+    restart: unless-stopped
+  lab:
+    build: ./app
+    image: laboratory-lab
+    environment: &bench-env
+      LAB_URL: http://localhost:${LAB_PORT:-5180}
+      LAB_HOSTILE_URL: http://localhost:${LAB_HOSTILE_PORT:-5181}
+      LAB_API_URL: http://localhost:${LAB_API_PORT:-5174}
+      GROBASE_ANON_KEY: ${GROBASE_ANON_KEY:?copy .env.example to .env}
+      GROBASE_TENANT_KEY: ${GROBASE_TENANT_KEY:-}
+      WAF_HOST: ${WAF_HOST}
+    ports: ["127.0.0.1:${LAB_PORT:-5180}:80"]
+    restart: unless-stopped
+  hostile:
+    build: ./app
+    image: laboratory-lab
+    environment: *bench-env
+    ports: ["127.0.0.1:${LAB_HOSTILE_PORT:-5181}:80"]
+    restart: unless-stopped
+  e2e:
+    profiles: [e2e]
+    image: mcr.microsoft.com/playwright:v1.55.0-noble
+    network_mode: host
+    working_dir: /work
+    environment:
+      LAB_URL: http://localhost:${LAB_PORT:-5180}
+      HOSTILE_URL: http://localhost:${LAB_HOSTILE_PORT:-5181}
+      CI: "1"
+    volumes:
+      - ./e2e:/work
+      - e2e-modules:/work/node_modules
+      - ./report:/work/report
+    command: sh -c "npm install --no-audit --no-fund --silent && npx playwright test"
+volumes:
+  ts-state: {}
+  e2e-modules: {}
