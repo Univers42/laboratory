@@ -66,8 +66,54 @@ Funnel URL and the tailnet directly.
 | Realtime | Presence and cursors (broadcast) | TRACK/BROADCAST between two cultures; skipped with the reason while the published realtime image ignores them (the source has them) |
 | Realtime | Meet someone from another browser | opt-in: heartbeat notes carry each page's cursor through the database; anyone else on the topic appears as a moving cursor; the Playwright "together" test runs it from two contexts |
 | Storage | A file goes in and comes back equal | bucket, PNG upload, listing, download with equal SHA-256, signed URL, delete |
-| Limits | The gateway pushes back | opt-in: a burst on the auth route must meet 429s |
+| Limits | The gateway pushes back | opt-in: a burst on a route Kong limits to 300/min must meet 429s (the auth route allows 60000/min, out of a browser's reach) |
 | Engines | GraphQL door · Mongo door · The tenant you were issued | the other doors answer with the same key; a tenant key identifies the app at `/v1/tenants/me` |
+
+## What it looks like
+
+![the bench: probe tree, live canvas, knobs, request log](docs/shots/bench.png)
+
+Ada's page during a meeting with Linus from another browser, cursors
+arriving through the database:
+
+![meet](docs/shots/meet.png)
+
+The same app served from the hostile origin: green means the browser
+refused, as it must.
+
+![hostile origin](docs/shots/hostile-origin.png)
+
+A burst against a limited route: 300 reach Kong's proxying, the rest get 429.
+
+![limits](docs/shots/limits.png)
+
+## What the bench found on its first day (2026-09-20)
+
+Real platform behaviour, all reproduced through the WAF door and now
+either fixed in born2root's installer or reported here:
+
+- **PATCH, PUT and DELETE were refused by the WAF** with an HTML 403 and
+  no CORS headers (browsers see "status 0"). grobase ships a CRS override
+  widening the allowed methods, but the image's `setup.conf` never
+  includes it, so the CRS default (GET HEAD POST OPTIONS) applied; `image/png`
+  bodies were refused too. born2root's `install_grobase.sh` now sets the CRS
+  image's `ALLOWED_METHODS` / `ALLOWED_REQUEST_CONTENT_TYPE` on the WAF.
+- **Realtime topics are `pg/<table>/<inserted|updated|deleted>`**, without
+  the schema; the JS SDK's default pattern (`pg/<schema>/<table>/*`)
+  never matches. The bench subscribes to `pg/lab_notes/*`.
+- **The published realtime image ignores TRACK, BROADCAST and UNTRACK**
+  (no PRESENCE frame, no ERROR). The source implements them. Presence and
+  broadcast skip with that reason; the cross-browser meeting goes through
+  the database instead.
+- **The auth route allows 60,000 requests a minute per address**, not
+  300; the 300/min limits sit on the tmdb, search and hypertube routes.
+  Kong counts in fixed calendar minutes (a burst straddling the boundary
+  never trips it) and, with `policy: local`, per Kong node.
+- `/v1/tenants/me` takes the tenant key as `Authorization: Bearer`, not
+  `X-Baas-Api-Key`; `/storage/v1/sign` wants the `method` it signs for; a
+  refresh in the same second as sign-in returns a byte-identical JWT.
+- `/graphql/v1` answers 406: PostgREST exposes no graphql schema in this
+  image.
 
 ## Playing together
 

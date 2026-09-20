@@ -304,9 +304,11 @@ registerProbe({
         const t0 = performance.now();
         let i = 0;
         let metAt = 0;
+        // each culture starts a quarter turn apart, so two cursors never sit on top of each other
+        const phase = (Math.max(0, CULTURES.findIndex((c) => c.id === me.id)) * Math.PI) / 2;
         while (!ctx.signal.aborted) {
           const t = i / 12;
-          const pos = { x: Math.round(50 + 38 * Math.cos(2 * Math.PI * t)), y: Math.round(50 + 30 * Math.sin(2 * Math.PI * t)) };
+          const pos = { x: Math.round(50 + 38 * Math.cos(2 * Math.PI * t + phase)), y: Math.round(50 + 30 * Math.sin(2 * Math.PI * t + phase)) };
           await api.req('/rest/v1/lab_notes', { method: 'POST', body: { dish_id: dishId, body: `heartbeat:${me.id}`, pos }, token, culture: me.id });
           i++;
           if (others.size > 0 && !metAt) metAt = performance.now();
