@@ -7,9 +7,9 @@ diagnose-401-blames-schema	code	settings	a refused key is reported as a missing 
 diagnose-unreachable-blames-schema	code	settings	an unreachable gateway is reported as a missing schema
 signin-never-diagnosed	code	settings	a failed sign-in never says why, as on the day the bench went red
 client-sends-no-key	code	smoke	GETs go out without the anon key and nothing notices
-cors-hostile-accepts-anything	code	cors	the hostile origin would pass the probe even if the gateway let it in
-realtime-any-event-order	code	together	realtime.changes goes green without the insert/update/delete it claims to see
-limits-429-optional	code	smoke	rate limiting could disappear from the gateway and the bench stays green
+cors-hostile-accepts-anything	code	rules	the hostile origin would pass the probe even if the gateway let it in
+realtime-any-event-order	code	rules	realtime.changes goes green without the insert/update/delete it claims to see
+limits-429-optional	code	rules	rate limiting could disappear from the gateway and the bench stays green
 everything-skips	code	smoke	every probe reports a skip and the suite still passes -- a vacuous green
 env-dead-anon-key	env	smoke	the bench would stay green against a gateway that refuses it
 env-wrong-gateway	env	smoke	the bench would stay green pointed at nothing
