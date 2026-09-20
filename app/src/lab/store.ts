@@ -12,6 +12,7 @@ export const defaults: Settings = {
   baseUrl: `${location.protocol}//${location.hostname}:5174`,
   anonKey: '',
   tenantKey: '',
+  realtimeToken: '',
   wafHost: '',
   castSize: 2,
   theme: 'dark',

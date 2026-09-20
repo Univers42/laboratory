@@ -7,11 +7,18 @@ import { sleep, waitFor, httpErr } from './util';
 //   - the Postgres producer emits topic `pg/<table>/<inserted|updated|deleted>`
 //     (no schema segment; the SDK's default pattern `pg/<schema>/<table>/*`
 //     never matches it), payload {table, schema, operation, data, old_data}
-//   - TRACK / BROADCAST / UNTRACK are silently ignored by the deployed
-//     realtime image: no PRESENCE frame, no broadcast EVENT, no ERROR. The
-//     source at d74aa97 implements them; ghcr.io/…/grobase-realtime:latest
-//     predates that. The "together" probe detects this and says so.
+//   - TRACK / BROADCAST need a JWT with `can_publish: true` and a namespace
+//     grant; GoTrue user tokens have neither, so the realtime plane logs
+//     "Track denied (namespace)" and stays silent. The VM owner mints a
+//     scoped token (`make realtime_token`, namespaces pg + lab) and the
+//     bench carries it as settings.realtimeToken. Presence and broadcast
+//     arrive as EVENT frames with event_type "presence" / "broadcast"; a
+//     sender receives its own broadcast too.
+//   - the published :latest realtime image predates presence entirely; the
+//     installer pins the image tagged with the clone's commit.
 const TOPIC_KNOB = { key: 'topic', label: 'topic', type: 'text' as const, default: 'pg/lab_notes/*', help: 'pg/<table>/* — the producer emits pg/<table>/<inserted|updated|deleted>' };
+const ROOM_KNOB = { key: 'room', label: 'presence topic', type: 'text' as const, default: 'lab/bench/*', help: 'a topic in the lab namespace the realtime token is scoped to' };
+const NO_TOKEN = 'no publish-capable realtime token: `make realtime_token` in born2root, then GROBASE_REALTIME_TOKEN in the lab .env (GoTrue sessions cannot TRACK or BROADCAST)';
 
 type Cursor = { x: number; y: number; name: string; color: string; from: string };
 interface RtState {
@@ -163,14 +170,16 @@ registerProbe({
   id: 'realtime.together',
   group: 'realtime',
   title: 'Presence and cursors (broadcast)',
-  blurb: 'Ada and Linus track presence on the topic and broadcast their cursors to each other. Skipped, with the reason, when the deployed realtime image does not answer TRACK.',
-  needs: ['schema', 'cast2'],
-  knobs: [TOPIC_KNOB, { key: 'animateMs', label: 'cursor dance (ms)', type: 'number', default: 2500 }],
+  blurb: 'Ada and Linus join a room with the publish-capable realtime token, each carrying their identity in the presence meta, and broadcast their cursors to each other. Skipped, with the reason, without that token.',
+  needs: ['cast2'],
+  knobs: [ROOM_KNOB, { key: 'animateMs', label: 'cursor dance (ms)', type: 'number', default: 2500 }],
   View: CanvasView,
   async run(ctx) {
     const { api } = ctx;
     const [a, b] = ctx.cast;
-    const topic = String(ctx.knob('topic') || TOPIC_KNOB.default);
+    const rt = ctx.settings.realtimeToken;
+    if (!rt) return { skipped: NO_TOKEN };
+    const topic = String(ctx.knob('room') || ROOM_KNOB.default);
     const state = newState(topic);
     const push = () => ctx.view({ ...state, cursors: { ...state.cursors }, roster: [...state.roster], counts: { ...state.counts } });
     const A = api.realtime();
@@ -201,15 +210,13 @@ registerProbe({
     A.on(handler('A'));
     B.on(handler('B'));
     try {
-      await ctx.step(`${a.name} subscribes to ${topic} and TRACKs presence`, () => A.open({ token: a.session!.access_token, topic, presenceMeta: { culture: a.id, name: a.name }, culture: a.id }));
-      await sleep(3000);
-      if (A.presenceFrames === 0) {
-        state.presenceSupported = false;
-        push();
-        return { skipped: 'no PRESENCE frame 3 s after TRACK (and no ERROR): the deployed realtime image ignores TRACK/BROADCAST. Presence and broadcast exist in the grobase source (d74aa97) but not in the published image.' };
-      }
-      state.presenceSupported = true;
-      await ctx.step(`${b.name} subscribes with presence`, () => B.open({ token: b.session!.access_token, topic, presenceMeta: { culture: b.id, name: b.name }, culture: b.id }));
+      await ctx.step(`${a.name} joins ${topic} with the realtime token and TRACKs presence`, () => A.open({ token: rt, topic, presenceMeta: { culture: a.id, name: a.name, user: a.session!.user.id }, culture: a.id }));
+      await ctx.step('a presence snapshot comes back (the token may publish)', async () => {
+        await waitFor(() => A.presenceFrames > 0, 4000, 'a presence frame after TRACK (is the token publish-capable and scoped to this namespace?)');
+        state.presenceSupported = true;
+        return `${A.presenceFrames} frame(s)`;
+      });
+      await ctx.step(`${b.name} joins with presence`, () => B.open({ token: rt, topic, presenceMeta: { culture: b.id, name: b.name, user: b.session!.user.id }, culture: b.id }));
       await ctx.step('presence: each sees the other', async () => {
         await waitFor(() => seenByA.has(b.id) && seenByB.has(a.id), 8000, `${a.name} to see ${b.name} and vice versa (A sees ${[...seenByA]}, B sees ${[...seenByB]})`);
         return `A sees [${[...seenByA]}], B sees [${[...seenByB]}]`;
@@ -248,7 +255,7 @@ registerProbe({
   title: 'Meet someone from another browser',
   blurb: 'This page joins the topic as its own culture and writes a heartbeat note carrying its cursor every second into the shared "meet" dish. Anyone else doing the same, from any browser or laptop, shows up here as a moving cursor: realtime through the database, no broadcast needed. Opt-in because alone it waits in vain.',
   needs: ['auth', 'optIn'],
-  knobs: [TOPIC_KNOB, { key: 'optIn', label: 'I have (or will have) company', type: 'toggle', default: false }, { key: 'waitMs', label: 'wait for company (ms)', type: 'number', default: 25000 }],
+  knobs: [TOPIC_KNOB, ROOM_KNOB, { key: 'optIn', label: 'I have (or will have) company', type: 'toggle', default: false }, { key: 'waitMs', label: 'wait for company (ms)', type: 'number', default: 25000 }],
   View: CanvasView,
   async run(ctx) {
     const { api, me } = ctx;
@@ -257,14 +264,23 @@ registerProbe({
     const state = newState(topic);
     const push = () => ctx.view({ ...state, cursors: { ...state.cursors }, roster: [...state.roster], counts: { ...state.counts }, feed: state.feed.slice() });
     const conn = api.realtime();
+    const room = ctx.settings.realtimeToken ? api.realtime() : undefined;
+    const roomTopic = String(ctx.knob('room') || ROOM_KNOB.default);
     const others = new Set<string>();
+    const present = new Set<string>();
     let theirBeats = 0;
-    conn.on((e) => {
+    room?.on((e) => {
       if (e.kind === 'presence') {
         state.counts.presence++;
-        membersOf(e).filter((m) => m !== me.id && cultureById(m)).forEach((m) => others.add(m));
+        present.clear();
+        membersOf(e).filter((m) => cultureById(m)).forEach((m) => present.add(m));
+        present.forEach((m) => m !== me.id && others.add(m));
+        state.roster = [...new Set([me.id, ...present, ...others])];
+        push();
       } else if (e.kind === 'broadcast') state.counts.broadcast++;
-      else if (e.kind === 'change') {
+    });
+    conn.on((e) => {
+      if (e.kind === 'change') {
         state.counts.change++;
         const row = rowOf(e);
         const body = String(row.data?.body ?? '');
@@ -281,12 +297,13 @@ registerProbe({
           }
         }
       }
-      state.roster = [me.id, ...others];
+      state.roster = [...new Set([me.id, ...present, ...others])];
       push();
     });
     let dishId = '';
     try {
-      await ctx.step(`${me.name} subscribes to ${topic} (and TRACKs, in case the server answers)`, () => conn.open({ token, topic, presenceMeta: { culture: me.id, name: me.name }, culture: me.id }));
+      await ctx.step(`${me.name} subscribes to ${topic}`, () => conn.open({ token, topic, culture: me.id }));
+      if (room) await ctx.step(`${me.name} joins ${roomTopic} with presence (realtime token)`, () => room.open({ token: ctx.settings.realtimeToken, topic: roomTopic, presenceMeta: { culture: me.id, name: me.name, user: me.session!.user.id }, culture: me.id }));
       await ctx.step('the shared "meet" dish exists', async () => {
         const g = await api.req<{ id: string }[]>('/rest/v1/lab_dishes?name=eq.meet&is_public=is.true&select=id&limit=1', { token, culture: me.id });
         if (g.status !== 200) throw httpErr(g.status, g.text);
@@ -319,10 +336,11 @@ registerProbe({
         if (others.size === 0) throw new Error(`nobody joined in ${total} ms: open ${location.origin}/?culture=linus somewhere else and run this probe there`);
         return `met ${[...others].map((o) => cultureById(o)?.name || o).join(', ')} · ${theirBeats} of their heartbeats · ${i} of mine`;
       });
-      ctx.expect('presence frames (only if this realtime image implements TRACK)', true, conn.presenceFrames > 0 ? `${conn.presenceFrames} PRESENCE frames` : 'none: presence not implemented by the deployed image; the meeting went through the database');
-      return { evidence: { topic, met: [...others], theirBeats, presenceFrames: conn.presenceFrames } };
+      ctx.expect('presence roster (with the realtime token)', !room || present.size > 1 || others.size > 0, room ? `present: ${[...present].join(', ') || 'only me'} · ${room.presenceFrames} presence frame(s)` : 'no realtime token: roster built from heartbeats');
+      return { evidence: { topic, roomTopic, met: [...others], present: [...present], theirBeats, presenceFrames: room?.presenceFrames ?? 0 } };
     } finally {
       conn.close();
+      room?.close();
       if (dishId) await api.req(`/rest/v1/lab_notes?dish_id=eq.${dishId}&author=eq.${me.session!.user.id}`, { method: 'DELETE', token, culture: me.id });
     }
   },

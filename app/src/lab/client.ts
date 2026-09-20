@@ -244,7 +244,17 @@ export class RealtimeConn {
             const ev = (f.event || {}) as Record<string, unknown>;
             const et = String(ev.event_type ?? ev.event ?? ev.type ?? '');
             const kind: RtEvent['kind'] = et === 'presence' ? 'presence' : et === 'broadcast' ? 'broadcast' : et ? 'change' : 'other';
-            const e: RtEvent = { kind, topic: ev.topic as string | undefined, type: et, payload: ev.payload ?? ev, raw: f };
+            if (kind === 'presence') this.presenceFrames++;
+            // a broadcast arrives as payload {event, payload}: unwrap it, and
+            // carry the broadcaster's event name as the RtEvent type
+            let payload: unknown = ev.payload ?? ev;
+            let type = et;
+            if (kind === 'broadcast' && payload && typeof payload === 'object' && 'payload' in (payload as Record<string, unknown>)) {
+              const inner = payload as { event?: string; payload?: unknown };
+              type = String(inner.event ?? 'broadcast');
+              payload = inner.payload;
+            }
+            const e: RtEvent = { kind, topic: ev.topic as string | undefined, type, payload, raw: f };
             this.handlers.forEach((h) => h(e));
             break;
           }

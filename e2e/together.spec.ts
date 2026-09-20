@@ -32,8 +32,13 @@ test('Ada and Linus meet on the realtime canvas from two browser contexts', asyn
   await a.screenshot({ path: `report/shots/${test.info().project.name}-changes.png` });
   await a.click('[data-testid="probe-realtime.together"]');
   const together = await runProbe(a, 'realtime.together');
-  if (together.skipped) test.info().annotations.push({ type: 'skipped', description: `realtime.together: ${together.skipped}` });
-  else expectOk(together, 'realtime.together');
+  const hasToken = await a.evaluate(() => !!(window as unknown as { laboratory: { settings(): { realtimeToken: string } } }).laboratory.settings().realtimeToken);
+  if (!hasToken && together.skipped) test.info().annotations.push({ type: 'skipped', description: `realtime.together: ${together.skipped}` });
+  else {
+    expectOk(together, 'realtime.together');
+    await expect(a.locator('[data-testid="roster"]')).toContainText('Ada');
+    await a.screenshot({ path: `report/shots/${test.info().project.name}-together.png` });
+  }
   await cA.close();
   await cB.close();
 });

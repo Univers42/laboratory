@@ -40,6 +40,11 @@ export function Knobs() {
         <label>tenant key (X-Baas-Api-Key)</label>
         <input class="mono" type="password" value={s.tenantKey} onChange={(e) => saveSettings({ tenantKey: (e.target as HTMLInputElement).value.trim() })} />
       </div>
+      <div class="field">
+        <label>realtime token (presence, broadcast)</label>
+        <input class="mono" type="password" value={s.realtimeToken} onChange={(e) => saveSettings({ realtimeToken: (e.target as HTMLInputElement).value.trim() })} />
+        <span class="help">from `make realtime_token` in born2root; user sessions cannot publish</span>
+      </div>
       <h3>Cast</h3>
       <div class="field">
         <label>cast size (cultures per run)</label>

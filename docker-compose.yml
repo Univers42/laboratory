@@ -53,6 +53,7 @@ services:
       LAB_API_URL: http://localhost:${LAB_API_PORT:-5174}
       GROBASE_ANON_KEY: ${GROBASE_ANON_KEY:?copy .env.example to .env}
       GROBASE_TENANT_KEY: ${GROBASE_TENANT_KEY:-}
+      GROBASE_REALTIME_TOKEN: ${GROBASE_REALTIME_TOKEN:-}
       WAF_HOST: ${WAF_HOST}
     ports: ["127.0.0.1:${LAB_PORT:-5180}:80"]
     restart: unless-stopped

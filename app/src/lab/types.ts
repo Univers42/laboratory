@@ -56,6 +56,8 @@ export interface Settings {
   baseUrl: string;
   anonKey: string;
   tenantKey: string;
+  /** publish-capable realtime JWT (presence, broadcast); empty = those probes skip */
+  realtimeToken: string;
   wafHost: string;
   castSize: number;
   theme: 'dark' | 'light';
