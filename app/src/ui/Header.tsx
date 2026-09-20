@@ -53,6 +53,15 @@ export function Header() {
           {busy ? 'Running…' : 'Run all'}
         </button>
       </header>
+      {/*
+        Banners live in their own grid row. Dropped straight into .app they
+        were auto-placed into the 1fr row, which gave a two-line notice half
+        the window and squeezed the three panes into the 230px meant for the
+        request log -- the bench looked broken while it was merely talking.
+        The wrapper is always rendered so the row exists and collapses to zero
+        when there is nothing to say.
+      */}
+      <div class="banners">
       {droppedOverrides.value.length ? (
         <div class="notice warn" data-testid="dropped-banner">
           The bench was reconfigured since you last changed things here ({droppedOverrides.value.join(', ')}). Those saved values are gone and the container's own configuration is in use
@@ -75,6 +84,7 @@ export function Header() {
           This page is served from the <b>stranger origin</b> ({location.origin}), which the gateway never allowed. The probes here ask the opposite question from the bench's: every one of them must be <b>refused</b>, and green means refused. A red dot on this page is a door standing open to any website.
         </div>
       ) : null}
+      </div>
     </>
   );
 }
