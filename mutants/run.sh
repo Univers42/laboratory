@@ -57,6 +57,11 @@ restore() {
 # leave its mutant applied in app/ and baked into the running lab image, and
 # the next reader found a deliberate break sitting in `git diff` looking like
 # unfinished work. Ctrl-C now puts the bench back.
+#
+# It is installed *below* the dirty-tree guard on purpose, and must stay there.
+# Installed above it, the guard's own `exit 1` would fire the trap and
+# `git checkout -- app/` would delete the uncommitted work the guard exists to
+# protect -- the refusal would destroy exactly what it refused to risk.
 trap 'restore; rm -rf "$TMP"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
