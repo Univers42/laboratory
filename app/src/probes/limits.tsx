@@ -1,4 +1,5 @@
 import { registerProbe } from '../lab/registry';
+import { sawRateLimit } from './rules';
 
 registerProbe({
   id: 'limits.burst',
@@ -30,7 +31,7 @@ registerProbe({
     });
     const passed = Object.entries(hist).filter(([k]) => k !== '429' && k !== '0').reduce((a, [, v]) => a + v, 0);
     ctx.expect('requests reached the upstream before the limit (or the minute was already spent)', true, passed > 0 ? Object.entries(hist).filter(([k]) => k !== '429').map(([k, v]) => `${v} × ${k}`).join(', ') : 'none: this address was still throttled from a burst less than a minute ago');
-    ctx.expect('the gateway answered 429 to the rest', (hist['429'] || 0) > 0, `${hist['429'] || 0} × 429${(hist['429'] || 0) === 0 ? ` — this route's limit is above ${burst}/min` : ''}`);
+    ctx.expect('the gateway answered 429 to the rest', sawRateLimit(hist), `${hist['429'] || 0} × 429${(hist['429'] || 0) === 0 ? ` — this route's limit is above ${burst}/min` : ''}`);
     return { evidence: { route, hist, burst, concurrency: conc } };
   },
   View({ state }) {

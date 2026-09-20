@@ -1,4 +1,5 @@
 import { registerProbe } from '../lab/registry';
+import { blockedByBrowser } from './rules';
 import { isHostile } from '../lab/store';
 
 registerProbe({
@@ -82,7 +83,7 @@ registerProbe({
       ctx.view({ hostileUrl, ...seen });
       return `the hostile page saw status ${seen!.status}${seen!.error ? ` (${seen!.error})` : ''}`;
     });
-    ctx.expect('the browser refused it: blocked as expected', seen?.status === 0, seen === undefined ? 'no answer' : `status ${seen.status}`);
+    ctx.expect('the browser refused it: blocked as expected', blockedByBrowser(seen), seen === undefined ? 'no answer' : `status ${seen.status}`);
     return { evidence: { hostileUrl, seen } };
   },
   View({ state }) {

@@ -4,6 +4,7 @@ import { ApiClient } from './client';
 import { cast as buildCast, ensureSession, CULTURES, type Culture } from './cultures';
 import { settings, setResult, setRunning, setView, results, log, isHostile } from './store';
 import type { LabCtx, Probe, Result, Step } from './types';
+import { RULES } from '../probes/rules';
 
 const REG: Probe[] = [];
 
@@ -193,6 +194,7 @@ declare global {
       settings(): unknown;
       slide(): { json: Record<string, unknown>; markdown: string };
       configure(patch: Record<string, unknown>): void;
+      rules: typeof RULES;
       ready: boolean;
     };
   }
@@ -211,6 +213,8 @@ export function installBridge(configure: (patch: Record<string, unknown>) => voi
     settings: () => settings.value,
     slide,
     configure,
+    // the probes' own judgements, so a spec can feed them impossible inputs
+    rules: RULES,
     ready: true,
   };
 }

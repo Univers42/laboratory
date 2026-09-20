@@ -1,0 +1,32 @@
+// The judgements a probe makes about the platform, as pure functions.
+//
+// They used to live inside the call that produced the evidence, where the only
+// way to exercise them was to break the platform for real. Mutation testing
+// walked in and weakened three of them -- "blocked" accepted any status, the
+// change order accepted any order, the burst accepted no 429 at all -- and the
+// whole Playwright suite stayed green, because every spec only ever asked
+// "did the probe say ok?". Out here they can be fed the inputs a healthy
+// platform never produces, which is what e2e/rules.spec.ts does through
+// window.laboratory.rules.
+
+/** the browser refused a cross-origin request: no status ever reaches the page */
+export function blockedByBrowser(seen: { status?: number } | undefined): boolean {
+  return seen !== undefined && seen.status === 0;
+}
+
+/** the life of one row as realtime delivered it, in order */
+export function changeOrder(types: string[]): string {
+  return types.join(',');
+}
+
+/** insert, then update, then delete -- all three, once each, in that order */
+export function isFullChangeOrder(types: string[]): boolean {
+  return changeOrder(types) === 'inserted,updated,deleted';
+}
+
+/** the burst met the gateway's limit rather than sailing past it */
+export function sawRateLimit(hist: Record<string, number>): boolean {
+  return (hist['429'] || 0) > 0;
+}
+
+export const RULES = { blockedByBrowser, changeOrder, isFullChangeOrder, sawRateLimit };

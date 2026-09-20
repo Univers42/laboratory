@@ -1,4 +1,5 @@
 import { registerProbe } from '../lab/registry';
+import { isFullChangeOrder } from './rules';
 import { cultureById, CULTURES, type Culture } from '../lab/cultures';
 import type { RtEvent } from '../lab/client';
 import { sleep, waitFor, httpErr } from './util';
@@ -155,7 +156,7 @@ registerProbe({
         await waitFor(() => atB.some((x) => x.type === 'deleted' && x.row.data?.id === noteId), 10000, `"deleted" at ${b.name}`);
         return 'cascade delivered';
       });
-      ctx.expect('events arrived in order: inserted, updated, deleted', atB.filter((x) => x.row.data?.id === noteId).map((x) => x.type).join(',') === 'inserted,updated,deleted', atB.map((x) => x.type).join(','));
+      ctx.expect('events arrived in order: inserted, updated, deleted', isFullChangeOrder(atB.filter((x) => x.row.data?.id === noteId).map((x) => x.type)), atB.map((x) => x.type).join(','));
       return { evidence: { topic, at_linus: atB.map((x) => ({ type: x.type, id: x.row.data?.id })) } };
     } finally {
       A.close();

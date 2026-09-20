@@ -85,3 +85,29 @@ test('knobs survive a reload, credentials still follow the container', async ({ 
   expect(live.theme).toBe('light');
   expect(live.anonKey).toBe(cfg.anonKey);
 });
+
+test('a refused key, a dead gateway and a missing schema are told apart', async ({ page }) => {
+  test.setTimeout(120000);
+  await openLab(page);
+
+  // a key this grobase never signed: the gateway answers 401 to everything,
+  // and for one evening the bench read that as "your schema is not applied"
+  await page.evaluate(([anon]) => window.laboratory.configure({ anonKey: anon }), [STALE_ANON] as const);
+  const refused = await runProbe(page, 'data.rls');
+  expect(refused.ok).toBe(false);
+  expect(refused.error).toMatch(/refused the anon key/);
+  expect(refused.error).not.toMatch(/schema missing/);
+
+  // and a sign-in that fails for the same reason must say the same thing
+  // rather than blaming the culture that could not sign in
+  const signin = await runProbe(page, 'auth.cast');
+  expect(signin.ok).toBe(false);
+  expect(signin.error, 'a failed sign-in is diagnosed, not just reported').toMatch(/refused the anon key/);
+
+  // a door with nothing behind it is neither of those
+  await page.evaluate(() => window.laboratory.configure({ baseUrl: 'http://localhost:5199' }));
+  const dead = await runProbe(page, 'data.rls');
+  expect(dead.ok).toBe(false);
+  expect(dead.error).toMatch(/did not answer|network or CORS/);
+  expect(dead.error).not.toMatch(/schema missing/);
+});
