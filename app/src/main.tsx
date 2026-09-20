@@ -53,10 +53,44 @@ function Embed() {
   );
 }
 
+// ?embed=write: the same hostile origin, sending the one request CORS does
+// not stop -- a "simple" POST, no custom headers, a content type the browser
+// never preflights. It goes out whatever the origin list says; the page is
+// only kept from reading the answer. The parent then checks, from the inside
+// and with a real session, whether the platform created anything.
+function EmbedWrite() {
+  useEffect(() => {
+    void (async () => {
+      const q = new URLSearchParams(location.search);
+      const base = q.get('base') || settings.value.baseUrl;
+      const nonce = q.get('nonce') || 'nonce';
+      const dish = q.get('dish') || '';
+      const msg: Record<string, unknown> = { lab: 'write', nonce, origin: location.origin };
+      try {
+        const r = await fetch(`${base.replace(/\/$/, '')}/rest/v1/lab_notes`, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ dish_id: dish, body: nonce }),
+        });
+        msg.sent = true;
+        msg.opaque = r.type === 'opaque';
+        msg.status = r.status;
+      } catch (e) {
+        msg.sent = false;
+        msg.error = e instanceof Error ? e.message : String(e);
+      }
+      window.parent?.postMessage(msg, '*');
+    })();
+  }, []);
+  return <div class="embed">hostile origin {location.origin} → a simple POST the browser will not preflight …</div>;
+}
+
 function App() {
   if (!configLoaded.value) return <div class="embed">loading…</div>;
   const q = new URLSearchParams(location.search);
   if (q.get('embed') === 'cors') return <Embed />;
+  if (q.get('embed') === 'write') return <EmbedWrite />;
   if (q.get('auto')) return <Companion id={q.get('auto')!} />;
   return (
     <div class={'app' + (logOpen.value ? '' : ' log-collapsed')}>

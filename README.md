@@ -59,6 +59,7 @@ Funnel URL and the tailnet directly.
 | Reach | Gateway is there | `/` answers, `/auth/v1/health` with the anon key, refused without it, REST OpenAPI, latency samples, Kong's exposed headers |
 | CORS | This origin is allowed | preflighted GET and JSON POST pass, and Kong's exposed headers reach the page |
 | CORS | A stranger origin is refused | the hostile page, in an iframe, reports what the browser let it see: nothing |
+| CORS | A stranger cannot write, though the browser lets it try | the hostile page posts a note into a public dish with no key — a *simple* request, which CORS never stops from being sent — and the bench, signed in on the inside, checks that nothing arrived |
 | Auth | Sign up, sign in, refresh, sign out | the session life, plus the answers that must be "no": wrong password, tampered token, refresh after sign-out; `rpc lab_ping` sees the same uid |
 | Auth | The cast signs in | each culture holds its own session, distinct ids |
 | Data | Rows, filters, pages, and who may see them | CRUD, `select`/`order`, `Range` paging, RPC, and RLS: Linus sees nothing private, everything public, cannot write or delete Ada's rows; anonymous reads public only |
@@ -71,23 +72,29 @@ Funnel URL and the tailnet directly.
 | Engines | GraphQL door · Mongo door · The tenant you were issued | `{ __typename }` and a query on `lab_dishes` through pg_graphql; the Mongo door answers with the same key; a tenant key identifies the app at `/v1/tenants/me` |
 
 The **stranger origin** (`http://localhost:5181`, the same image on a port the
-gateway never allowed) runs its own three probes instead, because the question
-there is inverted: every one of them must be **refused**, and green means
-refused. A red dot on that page is a door standing open to any website a
-person happens to have in another tab.
+gateway never allowed) runs its own bench instead, because the question there
+is inverted: every probe must be **refused**, and green means refused. A red
+dot on that page is a door standing open to any website a person happens to
+have in another tab.
 
 | group | probe | what must hold |
 | --- | --- | --- |
-| Stranger | Every door refuses this origin | all six REST doors, asked with the public anon key: the browser must hand the page nothing at all — status 0, no body, no headers |
+| Stranger | Every door refuses this origin | all twelve doors, asked with the public anon key — REST, storage, GraphQL, Mongo, the tenant, *and* the admin plane that issues API keys, the admin tenants route, the query router, the direct data plane, Trino's `/sql` and the studio. The browser must hand the page nothing at all: status 0, no body, no headers |
 | Stranger | The realtime socket refuses this origin | a WebSocket handshake is not a CORS request, so only the server's own Origin check can turn it away |
 | Stranger | The bench itself is unreadable from here | the lab origin's own `/lab-config.json` is refused too |
+| Stranger | Cookies buy this origin nothing | the same doors with `credentials: include` — the request a stranger makes hoping a logged-in tab left a cookie. A gateway that reflects any `Origin` with `Allow-Credentials: true` hands that tab over |
+| Stranger | A real token does not buy a socket either | the handshake with the publish-capable realtime token in hand: the origin check has to come *before* authentication, because a leaked token is exactly what a stranger page would hold |
+| Stranger | What CORS does not stop: the request still goes out | a simple POST — no custom header, `text/plain` body — is sent by the browser without asking anyone and comes back opaque. CORS protects the answer, never the request; the bench's counterpart probe checks the platform refused it |
 
 ![the stranger origin: three probes, every door refused](docs/shots/stranger.png)
 
 Listing the lab's probes on that page instead produced twelve red dots that
 all meant "the gateway is working", which is how the one genuinely open door
-stayed hidden. Three green probes is the whole bench there, on purpose: the
-page says so, and links back to the fourteen that check the platform works.
+stayed hidden. The page says how many probes it has and links back to the
+bench, because a short list there is the design and not a missing half: a
+stranger origin can only ask a handful of questions, and these are all of
+them — every door, with credentials, with a real token, and the one request
+CORS was never able to stop.
 
 ## What it looks like
 

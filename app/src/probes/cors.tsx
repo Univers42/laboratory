@@ -1,4 +1,5 @@
 import { registerProbe } from '../lab/registry';
+import { httpErr } from './util';
 import { blockedByBrowser } from './rules';
 import { isHostile } from '../lab/store';
 
@@ -88,6 +89,97 @@ registerProbe({
         <div class="card" style={state ? (blocked ? 'border-color:var(--ok)' : 'border-color:var(--bad)') : ''}>
           <h4>{state?.hostileUrl || 'hostile origin'}</h4>
           <div>{!state ? 'not asked yet' : blocked ? '✓ browser refused (status 0)' : `✗ the browser let it through: HTTP ${state.status}`}</div>
+        </div>
+      </div>
+    );
+  },
+});
+
+// ── the other half of the blind spot, seen from the inside ───────────────
+registerProbe({
+  id: 'cors.blindspot',
+  group: 'cors',
+  origin: 'lab',
+  title: 'A stranger cannot write, though the browser lets it try',
+  blurb: 'CORS stops a page from reading an answer; it never stops the browser from sending a simple request. The hostile origin posts a note into a public dish with no key, and the bench — signed in, on the inside — checks that nothing arrived. Anything that trusts CORS to keep strangers out is open to any tab.',
+  needs: ['auth', 'schema'],
+  knobs: [{ key: 'timeoutMs', label: 'iframe answer timeout (ms)', type: 'number', default: 15000 }],
+  async run(ctx) {
+    const { api, me } = ctx;
+    const hostileUrl = ctx.settings.hostileUrl;
+    const token = me.session!.access_token;
+    const nonce = `stranger-${Math.random().toString(36).slice(2, 10)}`;
+    let dishId = '';
+    try {
+      await ctx.step('the bench opens a public dish for the stranger to aim at', async () => {
+        const r = await api.req<{ id: string }[]>('/rest/v1/lab_dishes', {
+          method: 'POST',
+          body: { name: `blind spot ${nonce}`, is_public: true },
+          token,
+          headers: { Prefer: 'return=representation' },
+          culture: me.id,
+        });
+        if (r.status !== 201 || !r.json?.[0]?.id) throw httpErr(r.status, r.text);
+        dishId = r.json[0].id;
+        // public on purpose: a row that did land would be visible to this
+        // session, so "nothing arrived" cannot be row-level security hiding it
+        return `${dishId} (public, so a row that landed would be visible)`;
+      });
+      let seen: { sent?: boolean; opaque?: boolean; error?: string } = {};
+      await ctx.step(`${hostileUrl} posts a note with no key, unpreflighted`, async () => {
+        seen = await new Promise((resolve, reject) => {
+          const iframe = document.createElement('iframe');
+          iframe.className = 'hostile';
+          iframe.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px';
+          iframe.src = `${hostileUrl}/?embed=write&base=${encodeURIComponent(ctx.settings.baseUrl)}&dish=${encodeURIComponent(dishId)}&nonce=${nonce}`;
+          const timeout = Number(ctx.knob<number>('timeoutMs')) || 15000;
+          const to = setTimeout(() => {
+            cleanup();
+            reject(new Error(`no answer from the hostile iframe in ${timeout} ms`));
+          }, timeout);
+          const onMsg = (ev: MessageEvent) => {
+            const d = ev.data as { lab?: string; nonce?: string };
+            if (d && d.lab === 'write' && d.nonce === nonce && ev.origin === hostileUrl) {
+              cleanup();
+              resolve(ev.data as typeof seen);
+            }
+          };
+          const cleanup = () => {
+            clearTimeout(to);
+            window.removeEventListener('message', onMsg);
+            setTimeout(() => iframe.remove(), 500);
+          };
+          window.addEventListener('message', onMsg);
+          document.body.appendChild(iframe);
+        });
+        return seen.sent ? 'the browser sent it and told the stranger nothing' : `the browser would not send it: ${seen.error || 'unknown'}`;
+      });
+      let landed = -1;
+      await ctx.step('the bench looks for the stranger\'s row', async () => {
+        const r = await api.req<{ id: string }[]>(`/rest/v1/lab_notes?dish_id=eq.${dishId}&body=eq.${nonce}&select=id`, { token, culture: me.id });
+        if (r.status !== 200) throw httpErr(r.status, r.text);
+        landed = r.json?.length ?? -1;
+        return landed === 0 ? 'nothing was written' : `${landed} row(s) written by an origin the gateway never allowed`;
+      });
+      ctx.expect('the platform refused it server-side, not just at the browser', landed === 0, landed === 0 ? 'no row, and the gateway asked for a key before the body was ever read' : `${landed} row(s) landed: this route trusts CORS to keep strangers out`);
+      ctx.view({ nonce, landed, sent: seen.sent });
+      return { evidence: { nonce, dishId, landed, iframe: seen } };
+    } finally {
+      if (dishId) await api.req(`/rest/v1/lab_dishes?id=eq.${dishId}`, { method: 'DELETE', token, culture: me.id });
+    }
+  },
+  View({ state }) {
+    if (!state) return <div class="card">not run</div>;
+    const clean = state.landed === 0;
+    return (
+      <div class="two">
+        <div class="card">
+          <h4>what the browser did</h4>
+          <div>{state.sent ? 'sent the request — a simple POST needs no permission to leave' : 'refused to send it'}</div>
+        </div>
+        <div class="card" style={clean ? 'border-color:var(--ok)' : 'border-color:var(--bad)'}>
+          <h4>what the platform did</h4>
+          <div data-testid="blindspot-verdict">{clean ? '✓ refused it: nothing was written' : `✗ ${state.landed} row(s) landed from a stranger origin`}</div>
         </div>
       </div>
     );

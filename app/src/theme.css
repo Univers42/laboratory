@@ -35,6 +35,7 @@ button.over { background: none; border: 1px solid var(--warn); color: var(--warn
 table.doors { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.doors td { padding: 4px 8px; border-bottom: 1px solid var(--line); }
 table.doors th { padding: 4px 8px; text-align: left; font-weight: 500; color: var(--fg-3); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--line); }
+table.doors td.cost { color: var(--fg-3); font-size: 12px; }
 table.doors tr.held td:last-child { color: var(--ok); }
 table.doors tr.open td:last-child { color: var(--bad); font-weight: 600; }
 p.ok { color: var(--ok); } p.bad { color: var(--bad); }

@@ -83,6 +83,10 @@ export interface ReqOptions {
   signal?: AbortSignal;
   /** do not send the apikey header (the "no key" probes) */
   noKey?: boolean;
+  /** send cookies: the stranger bench asks whether credentials buy anything */
+  credentials?: RequestCredentials;
+  /** 'no-cors' sends a simple request the page will not be allowed to read */
+  mode?: RequestMode;
   /** the answer this request is asking for, when that is not "it worked" */
   want?: Want;
   /** one line the log shows instead of an error: why that answer is right */
@@ -138,7 +142,7 @@ export class ApiClient {
     const t0 = performance.now();
     const entry: LogEntry = { n: ++seq, t: Date.now(), culture: o.culture, method, url, status: 0, ok: false, ms: 0, preflight };
     try {
-      const r = await fetch(url, { method, headers, body, signal: o.signal, credentials: 'omit' });
+      const r = await fetch(url, { method, headers, body, signal: o.signal, credentials: o.credentials || 'omit', mode: o.mode });
       const text = await r.text();
       let json: T | null = null;
       try {
@@ -149,6 +153,9 @@ export class ApiClient {
       entry.ms = Math.round(performance.now() - t0);
       entry.status = r.status;
       entry.ok = r.ok;
+      // a no-cors request comes back opaque: it was sent, and the page is
+      // allowed to know nothing else about it. status 0 is not a refusal here.
+      if (r.type === 'opaque') entry.note = 'opaque: sent, but the page may not read the answer';
       entry.allowOrigin = r.headers.get('access-control-allow-origin');
       entry.allowCredentials = r.headers.get('access-control-allow-credentials');
       entry.upstreamMs = r.headers.get('x-kong-upstream-latency');
