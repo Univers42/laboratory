@@ -16,6 +16,11 @@ export function listProbes(): Probe[] {
   const here = isHostile.value ? 'hostile' : 'lab';
   return REG.filter((p) => (p.origin || 'lab') === here);
 }
+/** how many probes belong to a side, whichever side this page is */
+export function probeCount(origin: 'lab' | 'hostile'): number {
+  return REG.filter((p) => (p.origin || 'lab') === origin).length;
+}
+
 export function probeById(id: string): Probe | undefined {
   return REG.find((p) => p.id === id);
 }

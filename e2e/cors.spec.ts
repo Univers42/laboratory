@@ -18,7 +18,10 @@ test('lab origin passes, hostile origin is refused', async ({ page, browser }) =
   const ctx = await browser.newContext();
   const hp = await ctx.newPage();
   await openLab(hp, 'ada', HOSTILE);
-  await expect(hp.locator('.hostile-banner')).toBeVisible();
+  // the page must say what it is: a different bench, not a broken one
+  await expect(hp.locator('.stranger-banner')).toContainText('must be');
+  await expect(hp.locator('.stranger-banner')).toContainText('3 probes');
+  await expect(hp.getByTestId('to-the-bench')).toHaveAttribute('href', /5180/);
 
   const ids = (await listProbes(hp)).map((p) => p.id);
   expect(ids, 'the stranger page shows the stranger bench, not the lab one').toEqual(['stranger.doors', 'stranger.socket', 'stranger.bench']);

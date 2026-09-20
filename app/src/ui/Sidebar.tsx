@@ -1,5 +1,6 @@
 import { GROUPS } from '../lab/types';
 import { listProbes } from '../lab/registry';
+import { isHostile } from '../lab/store';
 import { results, running, selected } from '../lab/store';
 
 export function Sidebar() {
@@ -30,10 +31,10 @@ export function Sidebar() {
       })}
       <div class="legend">
         <span>
-          <i class="dot ok" /> passed
+          <i class="dot ok" /> {isHostile.value ? 'refused, as it must be' : 'passed'}
         </span>
         <span>
-          <i class="dot bad" /> failed
+          <i class="dot bad" /> {isHostile.value ? 'LET IN: a door open to any website' : 'failed'}
         </span>
         <span>
           <i class="dot skip" /> skipped: opt-in (press Run on it) or not offered by the platform

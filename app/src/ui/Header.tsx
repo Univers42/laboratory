@@ -1,5 +1,5 @@
 import { settings, okCount, failCount, running, saveSettings, isHostile, overriddenKeys, droppedOverrides, resetSettings, configuredFromServer } from '../lab/store';
-import { runAll, slide } from '../lab/registry';
+import { runAll, slide, probeCount } from '../lab/registry';
 import { cast } from '../lab/cultures';
 import { CultureBadge } from './CultureBadge';
 
@@ -80,8 +80,16 @@ export function Header() {
         </div>
       ) : null}
       {isHostile.value ? (
-        <div class="hostile-banner">
-          This page is served from the <b>stranger origin</b> ({location.origin}), which the gateway never allowed. The probes here ask the opposite question from the bench's: every one of them must be <b>refused</b>, and green means refused. A red dot on this page is a door standing open to any website.
+        <div class="stranger-banner">
+          <span class="tag">🔒 stranger origin</span>
+          <span>
+            This page is <b>{location.origin}</b>, which the gateway never allowed, so it runs a different bench: <b>{probeCount('hostile')} probes</b> that ask the opposite question. Everything here must be{' '}
+            <b>refused</b>, and green means refused — a red dot is a door standing open to any website. The {probeCount('lab')} probes that check the platform <i>works</i> live on the bench.
+          </span>
+          <span class="spacer" />
+          <a class="btn small" href={s.labUrl || 'http://localhost:5180'} data-testid="to-the-bench">
+            open the bench →
+          </a>
         </div>
       ) : null}
       </div>

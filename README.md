@@ -57,7 +57,7 @@ Funnel URL and the tailnet directly.
 | group | probe | what must hold |
 | --- | --- | --- |
 | Reach | Gateway is there | `/` answers, `/auth/v1/health` with the anon key, refused without it, REST OpenAPI, latency samples, Kong's exposed headers |
-| CORS | This origin is allowed | preflighted GET and JSON POST pass; on the hostile origin both are refused (status 0) |
+| CORS | This origin is allowed | preflighted GET and JSON POST pass, and Kong's exposed headers reach the page |
 | CORS | A stranger origin is refused | the hostile page, in an iframe, reports what the browser let it see: nothing |
 | Auth | Sign up, sign in, refresh, sign out | the session life, plus the answers that must be "no": wrong password, tampered token, refresh after sign-out; `rpc lab_ping` sees the same uid |
 | Auth | The cast signs in | each culture holds its own session, distinct ids |
@@ -68,6 +68,25 @@ Funnel URL and the tailnet directly.
 | Storage | A file goes in and comes back equal | bucket, PNG upload, listing, download with equal SHA-256, signed URL, delete |
 | Limits | The gateway pushes back | runs last: a burst on a route Kong limits to 300/min must meet 429s (the auth route allows 60000/min, out of a browser's reach) |
 | Engines | GraphQL door · Mongo door · The tenant you were issued | `{ __typename }` and a query on `lab_dishes` through pg_graphql; the Mongo door answers with the same key; a tenant key identifies the app at `/v1/tenants/me` |
+
+The **stranger origin** (`http://localhost:5181`, the same image on a port the
+gateway never allowed) runs its own three probes instead, because the question
+there is inverted: every one of them must be **refused**, and green means
+refused. A red dot on that page is a door standing open to any website a
+person happens to have in another tab.
+
+| group | probe | what must hold |
+| --- | --- | --- |
+| Stranger | Every door refuses this origin | all six REST doors, asked with the public anon key: the browser must hand the page nothing at all — status 0, no body, no headers |
+| Stranger | The realtime socket refuses this origin | a WebSocket handshake is not a CORS request, so only the server's own Origin check can turn it away |
+| Stranger | The bench itself is unreadable from here | the lab origin's own `/lab-config.json` is refused too |
+
+![the stranger origin: three probes, every door refused](docs/shots/stranger.png)
+
+Listing the lab's probes on that page instead produced twelve red dots that
+all meant "the gateway is working", which is how the one genuinely open door
+stayed hidden. Three green probes is the whole bench there, on purpose: the
+page says so, and links back to the fourteen that check the platform works.
 
 ## What it looks like
 
@@ -137,6 +156,14 @@ VM's own clone) and, until that merges, carried by born2root's installer:
   everything else binds loopback; `/v1/tenants/me` takes the tenant key as
   `Authorization: Bearer`; `/storage/v1/sign` wants the `method` it signs
   for; a refresh in the same second as sign-in returns a byte-identical JWT.
+- **The realtime WebSocket accepted any origin.** A handshake is not a CORS
+  request -- no preflight, no `Access-Control-Allow-Origin`, nothing for
+  Kong's list to act on -- so while all six REST doors refused a stranger
+  origin, the socket opened for it with the public anon key. Fixed with
+  `REALTIME_ALLOWED_ORIGINS`, checked at the upgrade: empty is the old
+  behaviour, a handshake with no Origin header (a server-side client) is
+  always allowed, and the comparison is the whole serialized origin so no
+  suffix match can accept `app.example.com.evil.test`.
 - Operational: the realtime service does not reconnect its Postgres LISTEN
   after the database container is recreated; restart it. grobase's own
   `make up` on a live stack re-resolves ports and moves the WAF.
