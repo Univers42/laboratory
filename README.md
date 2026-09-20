@@ -232,3 +232,10 @@ A bench is a directory of probes registered through `registerProbe` with
 the contract in `src/lab/types.ts`. Nothing in `src/lab` or `src/ui` knows
 grobase; a bench for another backend, or for a low-level program driven
 through a small HTTP shim, is a new `src/probes/<bench>/` and one import.
+
+Bring a mutant with it. A probe's verdict is only as good as the proof that
+it can say no, and the mutation score is a statement about the sixteen
+behaviours someone wrote mutants for -- not about the bench. A new probe
+whose judgement lives in `rules.ts`, with its truth table in
+`e2e/rules.spec.ts` and one line in `mutants/index.tsv`, is a probe the next
+person can trust when it is green.
