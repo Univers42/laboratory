@@ -78,6 +78,11 @@ arriving through the database:
 
 ![meet](docs/shots/meet.png)
 
+Ada and Linus in one room with the publish-capable realtime token: presence
+frames, 128 cursor broadcasts, and the roster after Linus leaves.
+
+![presence and broadcast](docs/shots/together.png)
+
 The same app served from the hostile origin: green means the browser
 refused, as it must.
 
