@@ -1,5 +1,5 @@
 diff --git a/app/src/probes/rules.ts b/app/src/probes/rules.ts
-index 968d282..241b96e 100644
+index 4c50039..432bce2 100644
 --- a/app/src/probes/rules.ts
 +++ b/app/src/probes/rules.ts
 @@ -26,7 +26,7 @@ export function isFullChangeOrder(types: string[]): boolean {
@@ -10,4 +10,4 @@ index 968d282..241b96e 100644
 +  return (hist['429'] || 0) >= 0;
  }
  
- export const RULES = { blockedByBrowser, changeOrder, isFullChangeOrder, sawRateLimit };
+ /**

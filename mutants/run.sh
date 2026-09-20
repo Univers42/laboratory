@@ -69,6 +69,7 @@ trap 'exit 143' TERM
 killed=0
 survived=0
 invalid=0
+stale=0
 : >"$TMP/rows"
 
 # shellcheck disable=SC2034
@@ -81,6 +82,7 @@ while IFS='	' read -r id kind SPEC means <&3; do
 
     if [ "$kind" = code ]; then
         if ! git apply "mutants/$id.patch" 2>"$TMP/apply"; then
+            stale=$((stale + 1))
             printf 'STALE   %s -- the code it mutated has moved; regenerate it\n' "$id"
             sed 's/^/    /' "$TMP/apply"
             printf '%s\t%s\tSTALE\t%s\n' "$id" "$kind" "$means" >>"$TMP/rows"
@@ -133,13 +135,13 @@ score=0
 [ "$total" -eq 0 ] || score=$((killed * 100 / total))
 {
     printf '# Mutation report — %s, %s\n\n' "$(date -u +%Y-%m-%dT%H:%MZ)" "$PROJECT"
-    printf 'Killed **%d**, survived **%d**, invalid %d — mutation score **%d%%**.\n\n' "$killed" "$survived" "$invalid" "$score"
+    printf 'Killed **%d**, survived **%d**, invalid %d, stale %d — mutation score **%d%%**.\n\n' "$killed" "$survived" "$invalid" "$stale" "$score"
     printf '| mutant | kind | verdict | what its survival would mean |\n|---|---|---|---|\n'
     while IFS='	' read -r id kind verdict means; do
         printf '| `%s` | %s | %s | %s |\n' "$id" "$kind" "$verdict" "$means"
     done <"$TMP/rows"
 } >"$REPORT"
 
-printf '\n== killed %d · survived %d · invalid %d · score %d%%\n' "$killed" "$survived" "$invalid" "$score"
+printf '\n== killed %d · survived %d · invalid %d · stale %d · score %d%%\n' "$killed" "$survived" "$invalid" "$stale" "$score"
 printf '== %s\n' "$REPORT"
-[ "$survived" -eq 0 ]
+[ "$survived" -eq 0 ] && [ "$stale" -eq 0 ]
