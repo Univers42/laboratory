@@ -29,4 +29,14 @@ export function sawRateLimit(hist: Record<string, number>): boolean {
   return (hist['429'] || 0) > 0;
 }
 
-export const RULES = { blockedByBrowser, changeOrder, isFullChangeOrder, sawRateLimit };
+/**
+ * the realtime handshake was turned away. Its own judgement rather than a bare
+ * `!opened`, because CORS cannot express this one: a WebSocket is upgraded
+ * without a preflight, so only the server's own Origin check can refuse it,
+ * and "the socket opened" is the whole finding.
+ */
+export function socketRefused(outcome: { opened: boolean }): boolean {
+  return !outcome.opened;
+}
+
+export const RULES = { blockedByBrowser, changeOrder, isFullChangeOrder, sawRateLimit, socketRefused };

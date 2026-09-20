@@ -5,9 +5,10 @@
 import type { ApiClient } from './client';
 import type { Culture } from './cultures';
 
-export type Group = 'reach' | 'cors' | 'auth' | 'data' | 'realtime' | 'storage' | 'limits' | 'engines';
+export type Group = 'reach' | 'cors' | 'auth' | 'data' | 'realtime' | 'storage' | 'limits' | 'engines' | 'stranger';
 
 export const GROUPS: { id: Group; title: string; blurb: string }[] = [
+  { id: 'stranger', title: 'Stranger', blurb: 'This page is an origin the platform never allowed. Everything here must be refused; green means refused.' },
   { id: 'reach', title: 'Reach', blurb: 'Is the platform there, how far away is it, through which door.' },
   { id: 'cors', title: 'CORS', blurb: 'What a browser on this origin is allowed to ask, and what a stranger is refused.' },
   { id: 'auth', title: 'Auth', blurb: 'Sign up, sign in, refresh, sign out, and the ways it must say no.' },
@@ -86,6 +87,13 @@ export interface Probe {
   group: Group;
   title: string;
   blurb: string;
+  /**
+   * which page this probe belongs to. 'lab' is the origin the gateway allows;
+   * 'hostile' is the stranger origin, where the question is inverted and the
+   * only good answer is "refused". A probe written for one is meaningless on
+   * the other, and listing it there only produces red dots that mean nothing.
+   */
+  origin?: 'lab' | 'hostile';
   needs?: Need[];
   knobs?: KnobSpec[];
   run(ctx: LabCtx): Promise<{ ok?: boolean; evidence?: Record<string, unknown>; skipped?: string } | void>;

@@ -72,7 +72,7 @@ export function Header() {
       ) : null}
       {isHostile.value ? (
         <div class="hostile-banner">
-          This page is served from the <b>hostile origin</b> ({location.origin}), which is not in the gateway's CORS list. Every cross-origin probe here is expected to be refused by the browser: green means "blocked as expected".
+          This page is served from the <b>stranger origin</b> ({location.origin}), which the gateway never allowed. The probes here ask the opposite question from the bench's: every one of them must be <b>refused</b>, and green means refused. A red dot on this page is a door standing open to any website.
         </div>
       ) : null}
     </>

@@ -5,48 +5,39 @@ import { isHostile } from '../lab/store';
 registerProbe({
   id: 'cors.origin',
   group: 'cors',
+  origin: 'lab',
   title: 'This origin is allowed',
-  blurb: 'A cross-origin request with the apikey header forces a preflight. On the lab origin it must pass; on the hostile origin the browser must refuse it.',
+  blurb: 'A cross-origin request with the apikey header forces a preflight, which the gateway must answer with this exact origin. The stranger side of the question lives on the hostile page.',
   async run(ctx) {
-    const hostile = isHostile.value;
     const { api } = ctx;
-    await ctx.step(hostile ? 'a preflighted GET is refused by the browser' : 'a preflighted GET (apikey header) passes', async () => {
+    await ctx.step('a preflighted GET (apikey header) passes', async () => {
       const r = await api.req('/auth/v1/health');
-      if (hostile) {
-        if (r.status !== 0) throw new Error(`expected the browser to refuse, got HTTP ${r.status}`);
-        return 'blocked as expected (status 0)';
-      }
       if (r.status === 0) throw new Error(`browser refused: ${r.text}`);
       return `HTTP ${r.status}`;
     });
-    await ctx.step(hostile ? 'a JSON POST is refused too' : 'a JSON POST (content-type preflight) passes', async () => {
+    await ctx.step('a JSON POST (content-type preflight) passes', async () => {
       const r = await api.req('/rest/v1/rpc/lab_ping', { method: 'POST', body: {} });
-      if (hostile) {
-        if (r.status !== 0) throw new Error(`expected refusal, got HTTP ${r.status}`);
-        return 'blocked as expected (status 0)';
-      }
       if (r.status === 0) throw new Error(`browser refused: ${r.text}`);
       return `HTTP ${r.status}${r.status === 404 ? ' (schema not applied yet, but CORS passed)' : ''}`;
     });
-    if (!hostile)
-      await ctx.step('exposed headers reach the page', async () => {
-        const r = await api.req('/auth/v1/health');
-        const id = r.headers.get('x-request-id');
-        if (!id) throw new Error('X-Request-ID not readable: Access-Control-Expose-Headers lacks it');
-        return `X-Request-ID ${id} · X-Kong-Upstream-Latency ${r.headers.get('x-kong-upstream-latency') ?? '?'}`;
-      });
-    return { evidence: { origin: location.origin, hostile, gateway: api.base } };
+    await ctx.step('exposed headers reach the page', async () => {
+      const r = await api.req('/auth/v1/health');
+      const id = r.headers.get('x-request-id');
+      if (!id) throw new Error('X-Request-ID not readable: Access-Control-Expose-Headers lacks it');
+      return `X-Request-ID ${id} · X-Kong-Upstream-Latency ${r.headers.get('x-kong-upstream-latency') ?? '?'}`;
+    });
+    return { evidence: { origin: location.origin, gateway: api.base } };
   },
 });
 
 registerProbe({
   id: 'cors.hostile',
   group: 'cors',
+  origin: 'lab',
   title: 'A stranger origin is refused',
   blurb: 'The same app, served from an origin that is not in the gateway list, asks from an iframe. The browser must give it nothing: status 0. Green here means blocked.',
   knobs: [{ key: 'timeoutMs', label: 'iframe answer timeout (ms)', type: 'number', default: 15000 }],
   async run(ctx) {
-    if (isHostile.value) return { skipped: 'this page is the hostile origin: run "This origin is allowed" here instead' };
     const hostileUrl = ctx.settings.hostileUrl;
     if (!hostileUrl || hostileUrl === location.origin) return { skipped: 'no hostile origin configured (LAB_HOSTILE_URL)' };
     let seen: { status: number; error?: string } | undefined;

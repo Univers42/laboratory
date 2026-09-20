@@ -12,6 +12,7 @@ type Rules = {
   changeOrder(t: string[]): string;
   isFullChangeOrder(t: string[]): boolean;
   sawRateLimit(h: Record<string, number>): boolean;
+  socketRefused(o: { opened: boolean }): boolean;
 };
 const rules = (page: import('@playwright/test').Page, call: (r: Rules) => unknown) =>
   page.evaluate(`(${call.toString()})(window.laboratory.rules)`);
@@ -44,4 +45,9 @@ test('a burst that met no limit did not test the limit', async ({ page }) => {
   expect(await rules(page, (r) => r.sawRateLimit({ '200': 700 }))).toBe(false);
   expect(await rules(page, (r) => r.sawRateLimit({}))).toBe(false);
   expect(await rules(page, (r) => r.sawRateLimit({ '429': 0 }))).toBe(false);
+});
+
+test('a socket that opened was not refused, whatever else happened', async ({ page }) => {
+  expect(await rules(page, (r) => r.socketRefused({ opened: false }))).toBe(true);
+  expect(await rules(page, (r) => r.socketRefused({ opened: true }))).toBe(false);
 });

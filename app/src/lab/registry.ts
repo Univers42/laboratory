@@ -11,8 +11,10 @@ const REG: Probe[] = [];
 export function registerProbe(p: Probe) {
   if (!REG.some((x) => x.id === p.id)) REG.push(p);
 }
+// The stranger origin gets its own bench: same registry, different question.
 export function listProbes(): Probe[] {
-  return REG.slice();
+  const here = isHostile.value ? 'hostile' : 'lab';
+  return REG.filter((p) => (p.origin || 'lab') === here);
 }
 export function probeById(id: string): Probe | undefined {
   return REG.find((p) => p.id === id);
@@ -145,7 +147,7 @@ export async function runProbe(id: string, opts: { force?: boolean } = {}): Prom
 
 export async function runAll(): Promise<Result[]> {
   const out: Result[] = [];
-  for (const p of REG) out.push(await runProbe(p.id));
+  for (const p of listProbes()) out.push(await runProbe(p.id));
   return out;
 }
 
@@ -162,7 +164,7 @@ export function slide(): { json: Record<string, unknown>; markdown: string } {
   lines.push('');
   lines.push('| probe | result | ms | steps |');
   lines.push('|---|---|---:|---|');
-  for (const p of REG) {
+  for (const p of listProbes()) {
     const r = results.value[p.id];
     const verdict = !r ? 'not run' : r.skipped ? `skipped (${r.skipped})` : r.ok ? 'ok' : 'FAIL';
     const bad = r?.steps.filter((x) => !x.ok).map((x) => `${x.name}${x.detail ? ': ' + x.detail : ''}`).join('; ');
@@ -202,7 +204,7 @@ declare global {
 
 export function installBridge(configure: (patch: Record<string, unknown>) => void) {
   window.laboratory = {
-    list: () => REG.map((p) => ({ id: p.id, group: p.group, title: p.title, needs: p.needs || [] })),
+    list: () => listProbes().map((p) => ({ id: p.id, group: p.group, title: p.title, needs: p.needs || [] })),
     run: (id, force) => runProbe(id, { force }),
     runAll,
     results: () => results.value,

@@ -1,6 +1,8 @@
 // Registration order is sidebar order within each group.
 import './reach';
 import './cors';
+// only on the stranger origin, where every question is inverted
+import './stranger';
 import './auth';
 import './data';
 import './realtime';
