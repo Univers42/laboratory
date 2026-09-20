@@ -35,13 +35,13 @@ registerProbe({
       return `new token, expires in ${r.json.expires_in ?? '?'} s`;
     });
     await ctx.step('a wrong password is refused', async () => {
-      const r = await api.req('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: me.email, password: 'definitely-not-it' }, culture: me.id });
+      const r = await api.req('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: me.email, password: 'definitely-not-it' }, culture: me.id, want: [400, 401], why: 'the wrong password on purpose: a 400 is the door working' });
       if (r.status < 400 || r.status >= 500) throw new Error(`expected 4xx, got HTTP ${r.status}`);
       return `HTTP ${r.status}`;
     });
     await ctx.step('a tampered token is refused', async () => {
       const bad = sess!.access_token.slice(0, -4) + 'AAAA';
-      const r = await api.req('/auth/v1/user', { token: bad, culture: me.id });
+      const r = await api.req('/auth/v1/user', { token: bad, culture: me.id, want: [401, 403], why: 'a tampered JWT on purpose: the refusal is the signature check working' });
       // 401 from GoTrue; 403 when the gateway's jwt plugin rejects it first
       if (r.status !== 401 && r.status !== 403) throw new Error(`expected 401 or 403, got HTTP ${r.status}`);
       return `HTTP ${r.status}`;
@@ -59,7 +59,13 @@ registerProbe({
       return `HTTP ${r.status}`;
     });
     await ctx.step('the refresh token is dead after sign-out', async () => {
-      const r = await api.req('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: sess!.refresh_token }, culture: me.id });
+      const r = await api.req('/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST',
+        body: { refresh_token: sess!.refresh_token },
+        culture: me.id,
+        want: [400, 401, 403],
+        why: 'refreshing after sign-out on purpose: the token must be dead',
+      });
       if (r.status === 200) throw new Error('refresh still works after sign-out');
       return `HTTP ${r.status}`;
     });

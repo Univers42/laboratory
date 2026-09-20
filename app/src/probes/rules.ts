@@ -39,4 +39,17 @@ export function socketRefused(outcome: { opened: boolean }): boolean {
   return !outcome.opened;
 }
 
-export const RULES = { blockedByBrowser, changeOrder, isFullChangeOrder, sawRateLimit, socketRefused };
+/**
+ * A socket the bench closed politely must come back closed politely.
+ *
+ * RFC 6455 §5.5.1: an endpoint that receives a Close frame must send one
+ * back. A server that just drops the connection leaves the browser reporting
+ * code 1006 ("abnormal closure"), which an SDK cannot tell from the network
+ * dying -- so a normal goodbye drives reconnect-with-backoff and error logs.
+ * 1000 is the completed handshake, 1005 is "no status", which is still clean.
+ */
+export function closedCleanly(close: { code: number; wasClean: boolean }): boolean {
+  return close.wasClean && (close.code === 1000 || close.code === 1005);
+}
+
+export const RULES = { blockedByBrowser, changeOrder, isFullChangeOrder, sawRateLimit, socketRefused, closedCleanly };

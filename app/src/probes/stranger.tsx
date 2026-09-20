@@ -30,26 +30,45 @@ registerProbe({
   async run(ctx) {
     const seen: Record<string, number> = {};
     for (const d of DOORS) {
-      const r = await ctx.api.req(d.path);
+      const r = await ctx.api.req(d.path, { want: 'refused', why: 'the gateway does not know this origin, so the browser hands the page nothing' });
       seen[d.what] = r.status;
       ctx.expect(`${d.what} (${d.path.split('?')[0]}) is refused`, blockedByBrowser({ status: r.status }), r.status === 0 ? 'blocked before the page could read it' : `LET IN: HTTP ${r.status}`);
       ctx.view({ seen: { ...seen } });
     }
     return { evidence: { origin: location.origin, gateway: ctx.api.base, seen } };
   },
+  // A table of the word "refused" repeated six times was read as six
+  // errors. Each row now carries its own verdict in words -- "✓ correct:
+  // the door held" -- and the table says overhead what a full house means.
   View({ state }) {
     const seen: Record<string, number> = state?.seen || {};
+    const asked = DOORS.filter((d) => seen[d.what] !== undefined);
+    const held = asked.filter((d) => seen[d.what] === 0);
     return (
       <div class="card">
+        <p class={asked.length && held.length === asked.length ? 'ok' : asked.length ? 'bad' : 'help'} data-testid="doors-verdict">
+          {!asked.length
+            ? 'not asked yet'
+            : held.length === asked.length
+              ? `✓ all ${held.length} doors refused this origin — that is a pass`
+              : `⚠ ${asked.length - held.length} of ${asked.length} doors answered a page the gateway never allowed`}
+        </p>
         <table class="doors" data-testid="stranger-doors">
+          <thead>
+            <tr>
+              <th>door</th>
+              <th>what the browser got</th>
+              <th>verdict</th>
+            </tr>
+          </thead>
           <tbody>
             {DOORS.map((d) => {
               const st = seen[d.what];
               return (
-                <tr key={d.what}>
+                <tr key={d.what} class={st === undefined ? '' : st === 0 ? 'held' : 'open'}>
                   <td class="mono">{d.what}</td>
-                  <td class="mono">{st === undefined ? '…' : st === 0 ? 'refused' : `HTTP ${st}`}</td>
-                  <td>{st === undefined ? '' : st === 0 ? '🔒' : '⚠ open'}</td>
+                  <td class="mono">{st === undefined ? '…' : st === 0 ? 'nothing — refused' : `HTTP ${st}`}</td>
+                  <td>{st === undefined ? 'not asked yet' : st === 0 ? '✓ correct: the door held' : '⚠ LET IN — this door is open to any website'}</td>
                 </tr>
               );
             })}
@@ -101,7 +120,7 @@ registerProbe({
     return (
       <div class="card">
         <p class={state.opened ? 'bad' : 'ok'} data-testid="socket-verdict">
-          {state.opened ? '⚠ the socket opened' : '🔒 refused'}
+          {state.opened ? '⚠ LET IN: the socket opened to this origin' : '✓ correct: the handshake was refused'}
         </p>
         <p class="help">{state.detail}</p>
       </div>
@@ -119,7 +138,7 @@ registerProbe({
     const lab = ctx.settings.labUrl;
     ctx.expect('a lab origin is configured', !!lab && lab !== location.origin, lab || 'none');
     if (!lab || lab === location.origin) return { ok: false };
-    const r = await ctx.api.req(`${lab}/lab-config.json`);
+    const r = await ctx.api.req(`${lab}/lab-config.json`, { want: 'refused', why: 'the bench is a different origin: this page must not be able to read it' });
     ctx.expect(`${lab}/lab-config.json is refused`, blockedByBrowser({ status: r.status }), r.status === 0 ? 'blocked before the page could read it' : `LET IN: HTTP ${r.status}`);
     return { evidence: { lab, status: r.status } };
   },

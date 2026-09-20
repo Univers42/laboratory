@@ -29,18 +29,26 @@ export function Sidebar() {
           </div>
         );
       })}
-      <div class="legend">
+      {/*
+        A legend, not a status. Written as bare sentences next to the dots,
+        the lines read as things that were happening right now: "skipped:
+        opt-in…" and "LET IN: a door open to any website" were both reported
+        as errors on a page where nothing was skipped and no door was open.
+        Each line now says what the dot means, in that order.
+      */}
+      <div class="legend" data-testid="legend">
+        <div class="legend-title">what the dots mean</div>
         <span>
-          <i class="dot ok" /> {isHostile.value ? 'refused, as it must be' : 'passed'}
+          <i class="dot ok" /> green = {isHostile.value ? 'the platform refused this page, as it must' : 'the probe passed'}
         </span>
         <span>
-          <i class="dot bad" /> {isHostile.value ? 'LET IN: a door open to any website' : 'failed'}
+          <i class="dot bad" /> red = {isHostile.value ? 'a door let this page in — open to any website' : 'the probe failed'}
         </span>
         <span>
-          <i class="dot skip" /> skipped: opt-in (press Run on it) or not offered by the platform
+          <i class="dot skip" /> grey = not run: it is opt-in, or the platform does not offer it
         </span>
         <span>
-          <i class="dot run" /> running
+          <i class="dot run" /> amber = running now
         </span>
       </div>
     </aside>

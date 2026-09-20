@@ -1,5 +1,5 @@
-import { settings, okCount, failCount, running, saveSettings, isHostile, overriddenKeys, droppedOverrides, resetSettings, configuredFromServer } from '../lab/store';
-import { runAll, slide, probeCount } from '../lab/registry';
+import { settings, okCount, failCount, running, saveSettings, isHostile, overriddenKeys, droppedOverrides, resetSettings, configuredFromServer, progress } from '../lab/store';
+import { runAll, slide, probeCount, stopRun } from '../lab/registry';
 import { cast } from '../lab/cultures';
 import { CultureBadge } from './CultureBadge';
 
@@ -14,6 +14,7 @@ function download(name: string, text: string, type: string) {
 export function Header() {
   const s = settings.value;
   const busy = running.value.size > 0;
+  const p = progress.value;
   const me = cast(1)[0];
   return (
     <>
@@ -49,6 +50,22 @@ export function Header() {
         >
           Slide
         </button>
+        {/*
+          A run of the whole bench takes the better part of a minute (the
+          burst probe alone sends 700 requests), and a button that only said
+          "Running…" with no progress and no way out reads as a page that
+          has hung. It now says which probe it is on, and Stop ends the run.
+        */}
+        {busy ? (
+          <>
+            <span class="progress" data-testid="run-progress">
+              {p ? `${p.done + 1}/${p.total}` : ''} {p?.current || 'running'}…
+            </span>
+            <button class="btn" onClick={stopRun} data-testid="stop-all">
+              Stop
+            </button>
+          </>
+        ) : null}
         <button class="btn primary" disabled={busy} onClick={() => void runAll()} data-testid="run-all">
           {busy ? 'Running…' : 'Run all'}
         </button>

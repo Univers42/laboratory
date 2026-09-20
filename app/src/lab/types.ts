@@ -96,6 +96,12 @@ export interface Probe {
   origin?: 'lab' | 'hostile';
   needs?: Need[];
   knobs?: KnobSpec[];
+  /**
+   * how long this probe may take before the runner gives up on it and says
+   * so. The default (60 s) is generous for everything that talks to the
+   * gateway once; the burst probe is the exception and asks for more.
+   */
+  timeoutMs?: number;
   run(ctx: LabCtx): Promise<{ ok?: boolean; evidence?: Record<string, unknown>; skipped?: string } | void>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   View?: (props: { state: any; result?: Result }) => any;

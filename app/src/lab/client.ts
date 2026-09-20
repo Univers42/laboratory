@@ -6,6 +6,34 @@ import { pushLog } from './store';
 
 let seq = 0;
 
+/**
+ * What a probe wanted back from one request.
+ *
+ * Half of what a bench does is ask for a refusal on purpose: a wrong
+ * password, a call with no key, a burst past the rate limit, a stranger
+ * origin. The log had no way to know that, so it painted every one of them
+ * red -- 408 of 408 rows red under a bench where all fourteen probes were
+ * green, which reads as a broken platform. Declaring the wanted answer
+ * makes the log able to separate "this failed" from "this was supposed to
+ * fail", and it makes the *wrong* answer the loud one: a request that wants
+ * 401 and gets 200 is a door standing open, and now it is the only red row.
+ */
+export type Want = number | number[] | 'refused' | 'any';
+
+export function wantLabel(w: Want): string {
+  if (w === 'any') return 'anything';
+  if (w === 'refused') return 'refused';
+  if (Array.isArray(w)) return w.map((n) => String(n)).join(' or ');
+  return String(w);
+}
+
+export function wantMet(w: Want, status: number): boolean {
+  if (w === 'any') return true;
+  if (w === 'refused') return status === 0;
+  if (Array.isArray(w)) return w.includes(status);
+  return status === w;
+}
+
 export interface LogEntry {
   n: number;
   t: number;
@@ -24,6 +52,14 @@ export interface LogEntry {
   error?: string;
   ws?: boolean;
   note?: string;
+  /** what the probe asked for, rendered ("401", "refused", "anything") */
+  want?: string;
+  /** whether it got it; undefined when the probe did not say */
+  met?: boolean;
+  /** why a refusal is the right answer here, in the probe's words */
+  why?: string;
+  /** identical requests folded into this row (the burst probe sends 700) */
+  count?: number;
 }
 
 export interface Res<T = unknown> {
@@ -47,9 +83,20 @@ export interface ReqOptions {
   signal?: AbortSignal;
   /** do not send the apikey header (the "no key" probes) */
   noKey?: boolean;
+  /** the answer this request is asking for, when that is not "it worked" */
+  want?: Want;
+  /** one line the log shows instead of an error: why that answer is right */
+  why?: string;
 }
 
 const SIMPLE_METHODS = new Set(['GET', 'HEAD', 'POST']);
+
+function judge(entry: LogEntry, o: ReqOptions) {
+  if (o.want === undefined) return;
+  entry.want = wantLabel(o.want);
+  entry.met = wantMet(o.want, entry.status);
+  entry.why = o.why;
+}
 
 export class ApiClient {
   constructor(
@@ -107,11 +154,13 @@ export class ApiClient {
       entry.upstreamMs = r.headers.get('x-kong-upstream-latency');
       entry.proxyMs = r.headers.get('x-kong-proxy-latency');
       entry.requestId = r.headers.get('x-request-id');
+      judge(entry, o);
       pushLog(entry);
       return { status: r.status, ok: r.ok, headers: r.headers, json, text, ms: entry.ms };
     } catch (e) {
       entry.ms = Math.round(performance.now() - t0);
       entry.error = e instanceof Error ? e.message : String(e);
+      judge(entry, o);
       pushLog(entry);
       // status 0 is what the browser gives a CORS refusal: the response
       // exists, the page is not allowed to see it.
@@ -135,11 +184,13 @@ export class ApiClient {
       entry.ok = r.ok;
       entry.requestId = r.headers.get('x-request-id');
       entry.upstreamMs = r.headers.get('x-kong-upstream-latency');
+      judge(entry, o);
       pushLog(entry);
       return { status: r.status, ok: r.ok, data, type: r.headers.get('content-type'), ms: entry.ms };
     } catch (e) {
       entry.ms = Math.round(performance.now() - t0);
       entry.error = e instanceof Error ? e.message : String(e);
+      judge(entry, o);
       pushLog(entry);
       return { status: 0, ok: false, data: new ArrayBuffer(0), type: null, ms: entry.ms };
     }
@@ -152,6 +203,9 @@ export class ApiClient {
 }
 
 export type Frame = Record<string, unknown> & { type: string };
+
+/** how long to let frames in flight drain before closing a realtime socket */
+const DRAIN_MS = 120;
 
 export interface RtEvent {
   kind: 'change' | 'broadcast' | 'presence' | 'other';
@@ -169,6 +223,8 @@ export class RealtimeConn {
   subId = '';
   /** PRESENCE frames seen: zero after a TRACK means the server does not implement presence */
   presenceFrames = 0;
+  /** who this socket belongs to, so the close row says whose it was */
+  private who = 'lab';
   constructor(private readonly api: ApiClient) {}
 
   private log(note: string, ok = true, status = 101) {
@@ -192,6 +248,7 @@ export class RealtimeConn {
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     url.searchParams.set('apikey', this.api.anonKey);
     this.topic = opts.topic;
+    this.who = opts.culture || 'lab';
     this.subId = `lab:${opts.topic}:${Math.random().toString(36).slice(2, 8)}`;
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(url.toString());
@@ -208,7 +265,16 @@ export class RealtimeConn {
       ws.onerror = () => {
         this.log('socket error', false, 0);
       };
-      ws.onclose = (ev) => this.log(`closed ${ev.code}`, ev.code === 1000 || ev.code === 1005, ev.code);
+      // 1000 means both sides completed the closing handshake; 1006 means the
+      // connection simply vanished -- no Close frame came back. The code alone
+      // did not say which, and the difference is exactly the grobase defect
+      // this bench found (the gateway used to drop the socket on goodbye).
+      ws.onclose = (ev) =>
+        this.log(
+          `closed ${ev.code} (${this.who})${ev.wasClean ? ' clean: both sides said goodbye' : ' no closing handshake: the peer never answered'}${ev.reason ? ` — ${ev.reason}` : ''}`,
+          ev.code === 1000 || ev.code === 1005,
+          ev.code,
+        );
       ws.onmessage = (m) => {
         let f: Frame;
         try {
@@ -275,11 +341,33 @@ export class RealtimeConn {
     this.send({ type: 'UNTRACK', topic: this.topic });
   }
   close() {
+    // Closing a socket that is still CONNECTING aborts the handshake, and the
+    // browser reports 1006 for it however polite the intent was: there is no
+    // open connection to say goodbye on. Wait for it to open, or the bench
+    // blames the server for its own impatience.
+    const ws = this.ws;
+    if (!ws) return;
+    if (ws.readyState === WebSocket.CONNECTING) {
+      ws.addEventListener('open', () => this.close(), { once: true });
+      return;
+    }
+    if (ws.readyState !== WebSocket.OPEN) return;
     try {
       this.send({ type: 'UNSUBSCRIBE', sub_id: this.subId });
     } catch {
       /* already gone */
     }
-    this.ws?.close(1000);
+    // Closing on the same tick as the last broadcast leaves frames in flight
+    // in both directions, and the closing handshake loses the race often
+    // enough to show up as an occasional 1006. Unsubscribe, let the wire
+    // drain for a moment, then say goodbye: measured 2 dirty closes per bench
+    // run before, none after.
+    setTimeout(() => {
+      try {
+        ws.close(1000);
+      } catch {
+        /* already closed */
+      }
+    }, DRAIN_MS);
   }
 }

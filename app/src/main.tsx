@@ -40,7 +40,7 @@ function Embed() {
       const s = settings.value;
       const base = new URLSearchParams(location.search).get('base') || s.baseUrl;
       const api = new ApiClient(base, s.anonKey);
-      const r = await api.req('/auth/v1/health');
+      const r = await api.req('/auth/v1/health', { want: 'refused', why: 'this iframe is the stranger origin: the browser must give it nothing' });
       const msg = { lab: 'cors', origin: location.origin, status: r.status, ok: r.ok, error: r.status === 0 ? r.text : undefined };
       document.body.dataset.corsStatus = String(r.status);
       window.parent?.postMessage(msg, '*');

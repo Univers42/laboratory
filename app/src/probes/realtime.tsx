@@ -1,5 +1,5 @@
 import { registerProbe } from '../lab/registry';
-import { isFullChangeOrder } from './rules';
+import { isFullChangeOrder, closedCleanly } from './rules';
 import { cultureById, CULTURES, type Culture } from '../lab/cultures';
 import type { RtEvent } from '../lab/client';
 import { sleep, waitFor, httpErr } from './util';
@@ -363,5 +363,69 @@ registerProbe({
       if (frame) setTimeout(() => frame?.remove(), 6000);
       if (dishId) await api.req(`/rest/v1/lab_notes?dish_id=eq.${dishId}&author=eq.${me.session!.user.id}`, { method: 'DELETE', token, culture: me.id });
     }
+  },
+});
+
+// ── goodbye: the closing handshake ───────────────────────────────────────
+//
+// This probe exists because the bench found the gateway failing it. Every
+// socket the bench closed came back 1006 (abnormal closure) instead of 1000:
+// the realtime service returned from its read loop on the client's Close
+// frame and dropped the socket without answering, so a polite goodbye was
+// indistinguishable from the network dying. Fixed in grobase
+// (ws_handler: the writer owns the sink, so it is the one that answers);
+// this keeps it fixed.
+registerProbe({
+  id: 'realtime.goodbye',
+  group: 'realtime',
+  title: 'Sockets close with a handshake, not a drop',
+  blurb: 'A WebSocket that is closed politely must be answered politely: a Close frame back, code 1000. A server that drops the connection instead leaves every client seeing 1006 — the code for "the network died" — and SDKs reconnect from what was a normal goodbye.',
+  knobs: [{ key: 'sockets', label: 'sockets to close', type: 'number', default: 3 }],
+  async run(ctx) {
+    const n = Math.max(1, Math.min(10, Number(ctx.knob<number>('sockets')) || 3));
+    const url = `${ctx.settings.baseUrl.replace(/^http/, 'ws')}/realtime/v1/ws?apikey=${encodeURIComponent(ctx.settings.anonKey)}`;
+    const seen: { code: number; wasClean: boolean }[] = [];
+    for (let i = 0; i < n; i++) {
+      const outcome = await new Promise<{ code: number; wasClean: boolean }>((resolve) => {
+        const ws = new WebSocket(url);
+        const giveUp = setTimeout(() => resolve({ code: 0, wasClean: false }), 10000);
+        ws.onclose = (ev) => {
+          clearTimeout(giveUp);
+          resolve({ code: ev.code, wasClean: ev.wasClean });
+        };
+        ws.onopen = () => ws.close(1000);
+      });
+      seen.push(outcome);
+      ctx.view({ seen: [...seen], n });
+    }
+    const clean = seen.filter(closedCleanly).length;
+    ctx.expect(`all ${n} sockets closed with a handshake`, clean === n, seen.map((c) => `${c.code}${c.wasClean ? '' : ' (dropped)'}`).join(', '));
+    return { evidence: { closes: seen, clean, of: n } };
+  },
+  View({ state }) {
+    const seen: { code: number; wasClean: boolean }[] = state?.seen || [];
+    if (!seen.length) return <div class="card">not run</div>;
+    return (
+      <div class="card">
+        <table class="doors" data-testid="goodbye-table">
+          <thead>
+            <tr>
+              <th>socket</th>
+              <th>close code</th>
+              <th>verdict</th>
+            </tr>
+          </thead>
+          <tbody>
+            {seen.map((c, i) => (
+              <tr key={i} class={closedCleanly(c) ? 'held' : 'open'}>
+                <td class="mono">#{i + 1}</td>
+                <td class="mono">{c.code || 'no close'}</td>
+                <td>{closedCleanly(c) ? '✓ both sides said goodbye' : '⚠ dropped: the server never answered the Close frame'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   },
 });

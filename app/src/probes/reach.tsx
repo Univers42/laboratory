@@ -11,7 +11,7 @@ registerProbe({
     const { api } = ctx;
     let version = '';
     await ctx.step('the gateway answers at /', async () => {
-      const r = await api.req('/', { noKey: true });
+      const r = await api.req('/', { noKey: true, want: [200, 404], why: 'Kong answering at all is the point; it has no route for /' });
       if (r.status === 0) throw new Error(r.text);
       return `HTTP ${r.status}${r.status === 404 ? ' (Kong: no route for /)' : ''}`;
     });
@@ -22,7 +22,7 @@ registerProbe({
       return `${r.json?.name || ''} ${version}`.trim();
     });
     await ctx.step('the same call without a key is refused', async () => {
-      const r = await api.req('/auth/v1/health', { noKey: true });
+      const r = await api.req('/auth/v1/health', { noKey: true, want: [401, 403], why: 'asked without the anon key on purpose: it must be refused' });
       if (r.status !== 401 && r.status !== 403) throw new Error(`expected 401, got HTTP ${r.status}`);
       return `HTTP ${r.status}`;
     });

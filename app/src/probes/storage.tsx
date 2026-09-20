@@ -15,7 +15,7 @@ registerProbe({
     let blob: Blob | undefined;
     let hash = '';
     await ctx.step(`bucket ${bucket} exists or is created`, async () => {
-      let r = await api.req<{ name?: string; created?: boolean }>(`/storage/v1/bucket/${bucket}`, { method: 'POST', token, culture: me.id });
+      let r = await api.req<{ name?: string; created?: boolean }>(`/storage/v1/bucket/${bucket}`, { method: 'POST', token, culture: me.id, want: 'any', why: 'either verb shape makes the bucket; the probe falls back to the other' });
       if (r.status === 404 || r.status === 405) r = await api.req(`/storage/v1/bucket`, { method: 'POST', body: { name: bucket }, token, culture: me.id });
       if (r.ok) return `HTTP ${r.status}${r.json?.created === false ? ' (already there)' : ''}`;
       if (r.status === 409 || /exist/i.test(r.text)) return `HTTP ${r.status} (already there)`;
@@ -57,7 +57,7 @@ registerProbe({
     await ctx.step('delete the object; it is gone', async () => {
       const d = await api.req(`/storage/v1/object/${bucket}/${key}`, { method: 'DELETE', token, culture: me.id });
       if (!d.ok) throw httpErr(d.status, d.text);
-      const g = await api.bytes(`/storage/v1/object/${bucket}/${key}`, { token, culture: me.id });
+      const g = await api.bytes(`/storage/v1/object/${bucket}/${key}`, { token, culture: me.id, want: [404, 400, 403], why: 'fetched after the delete on purpose: the object must be gone' });
       if (g.ok) throw new Error('still downloadable after delete');
       return `HTTP ${d.status}, then ${g.status}`;
     });

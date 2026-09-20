@@ -44,18 +44,27 @@ export function cast(size: number): Culture[] {
   return [me, ...others].slice(0, Math.max(1, Math.min(4, size)));
 }
 
-async function signIn(api: ApiClient, c: Culture) {
-  return api.req<Session>('/auth/v1/token?grant_type=password', { method: 'POST', body: { email: c.email, password: c.password }, culture: c.id });
+// The opening sign-in is allowed to fail: the bench signs the culture up
+// when it does, so that 400 is a step in the flow and not a fault. Saying
+// so keeps it out of the log's "unexpected" count -- where it sat looking
+// exactly like a broken password.
+async function signIn(api: ApiClient, c: Culture, tentative = false) {
+  return api.req<Session>('/auth/v1/token?grant_type=password', {
+    method: 'POST',
+    body: { email: c.email, password: c.password },
+    culture: c.id,
+    ...(tentative ? { want: 'any' as const, why: 'first try; if this account does not exist yet the bench signs it up next' } : {}),
+  });
 }
 
 /** sign in, or sign up then sign in; keeps a session that still answers /user */
 export async function ensureSession(api: ApiClient, c: Culture): Promise<Session> {
   if (c.session) {
-    const me = await api.req('/auth/v1/user', { token: c.session.access_token, culture: c.id });
+    const me = await api.req('/auth/v1/user', { token: c.session.access_token, culture: c.id, want: 'any', why: 'checking whether the kept session still answers; the bench signs in again if not' });
     if (me.ok) return c.session;
     c.session = undefined;
   }
-  let r = await signIn(api, c);
+  let r = await signIn(api, c, true);
   if (!r.ok) {
     const up = await api.req<Session>('/auth/v1/signup', { method: 'POST', body: { email: c.email, password: c.password }, culture: c.id });
     if (up.ok && up.json?.access_token) r = up;

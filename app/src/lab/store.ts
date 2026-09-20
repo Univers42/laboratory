@@ -47,6 +47,10 @@ export const results = signal<Record<string, Result>>({});
 export const views = signal<Record<string, unknown>>({});
 export const log = signal<LogEntry[]>([]);
 export const running = signal<Set<string>>(new Set());
+// What "Run all" is doing right now, so the button can say it. A run with
+// no progress and no way out is the reason a 47-second sweep reads as a
+// hung page.
+export const progress = signal<{ done: number; total: number; current: string } | null>(null);
 export const selected = signal<string>('');
 export const configLoaded = signal(false);
 export const configuredFromServer = signal<Partial<Settings>>({});
@@ -173,8 +177,24 @@ export async function loadSettings() {
   configLoaded.value = true;
 }
 
+// The rate-limit probe sends 700 identical requests, so the log was 700
+// identical rows: they drowned every other row and, at the 500-entry cap,
+// evicted the ones worth reading (the whole log was the burst and nothing
+// else). Requests that are the same request -- same verb, same URL, same
+// answer -- fold into one row with a count. Nothing is lost but the
+// repetition; `ms` keeps the slowest of them. The window is small so that
+// two rows far apart in a run stay two rows.
+const sameRow = (a: LogEntry, b: LogEntry) => a.method === b.method && a.url === b.url && a.status === b.status && (a.error || '') === (b.error || '') && (a.want || '') === (b.want || '') && (a.note || '') === (b.note || '');
+
 export function pushLog(entry: LogEntry) {
   const next = log.value.length >= 500 ? log.value.slice(-400) : log.value.slice();
+  for (let i = next.length - 1; i >= 0 && i > next.length - 9; i--) {
+    if (sameRow(next[i], entry)) {
+      next[i] = { ...next[i], count: (next[i].count || 1) + 1, ms: Math.max(next[i].ms, entry.ms) };
+      log.value = next;
+      return;
+    }
+  }
   next.push(entry);
   log.value = next;
 }

@@ -29,7 +29,7 @@ registerProbe({
     const h = await ctx.api.req('/mongo/v1/health');
     const root = h.status === 404 ? await ctx.api.req('/mongo/v1/') : h;
     ctx.expect('the door answers', root.status !== 0 && root.status < 500, `HTTP ${root.status} ${root.text.slice(0, 80)}`);
-    ctx.expect('it wants a key', (await ctx.api.req('/mongo/v1/health', { noKey: true })).status === 401, 'without apikey');
+    ctx.expect('it wants a key', (await ctx.api.req('/mongo/v1/health', { noKey: true, want: 401, why: 'asked without the anon key on purpose: it must be refused' })).status === 401, 'without apikey');
     return { evidence: { status: root.status, body: root.json ?? root.text.slice(0, 200) } };
   },
 });
@@ -53,7 +53,7 @@ registerProbe({
       return `tenant ${String(t?.id ?? t?.slug ?? '?')} · ${String(t?.status ?? '')} ${String(t?.plan ?? '')}`.trim();
     });
     await ctx.step('without the key it is refused', async () => {
-      const r = await ctx.api.req('/v1/tenants/me');
+      const r = await ctx.api.req('/v1/tenants/me', { want: [401, 403], why: 'asked without the tenant key on purpose: it must be refused' });
       if (r.status < 400 || r.status >= 500) throw new Error(`expected 4xx, got HTTP ${r.status}`);
       return `HTTP ${r.status}`;
     });

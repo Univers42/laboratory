@@ -32,11 +32,17 @@ test('lab origin passes, hostile origin is refused', async ({ page, browser }) =
   // every REST door, named on the canvas, so a door that quietly opens cannot
   // hide inside a count. The canvas shows the selected probe, so select it.
   await hp.click('[data-testid="probe-stranger.doors"]');
-  const doors = await hp.locator('[data-testid="stranger-doors"] tr').allTextContents();
+  const doors = await hp.locator('[data-testid="stranger-doors"] tbody tr').allTextContents();
   expect(doors.length).toBe(6);
-  expect(doors.join(' '), 'a door that let the stranger in').not.toContain('open');
+  expect(doors.join(' '), 'a door that let the stranger in').not.toContain('LET IN');
+  // the page must say in words that a full house of refusals is a pass --
+  // six rows reading "refused" were reported as six errors
+  await expect(hp.getByTestId('doors-verdict')).toContainText('all 6 doors refused');
+  await expect(hp.getByTestId('doors-verdict')).toHaveClass(/ok/);
   await hp.click('[data-testid="probe-stranger.socket"]');
   await expect(hp.locator('[data-testid="socket-verdict"]')).toHaveText(/refused/);
+  // and the log under it must not read as a wall of failures
+  await expect(hp.getByTestId('log-summary')).toContainText('0 unexpected');
   await hp.screenshot({ path: `report/shots/${test.info().project.name}-stranger.png` });
   await ctx.close();
 });

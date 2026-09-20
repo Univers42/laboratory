@@ -73,7 +73,7 @@ registerProbe({
         return '0 dishes, 0 notes';
       });
       await ctx.step(`${linus.name} cannot pin a note on it`, async () => {
-        const r = await api.req('/rest/v1/lab_notes', { method: 'POST', body: { dish_id: dish!.id, body: 'intruder' }, token: tL, culture: linus.id });
+        const r = await api.req('/rest/v1/lab_notes', { method: 'POST', body: { dish_id: dish!.id, body: 'intruder' }, token: tL, culture: linus.id, want: [401, 403, 404], why: `${linus.name} writing into ${ada.name}'s private dish: row-level security must refuse it` });
         if (r.status < 400 || r.status >= 500) throw new Error(`expected a refusal, got HTTP ${r.status}`);
         return `HTTP ${r.status}`;
       });
@@ -106,7 +106,7 @@ registerProbe({
       await ctx.step('anonymous sees the public dish only', async () => {
         const d = await api.req<Dish[]>(`/rest/v1/lab_dishes?id=eq.${dish!.id}`);
         if (d.status !== 200 || d.json?.length !== 1) throw httpErr(d.status, d.text);
-        const w = await api.req('/rest/v1/lab_notes', { method: 'POST', body: { dish_id: dish!.id, body: 'anon' } });
+        const w = await api.req('/rest/v1/lab_notes', { method: 'POST', body: { dish_id: dish!.id, body: 'anon' }, want: [401, 403, 404], why: 'nobody signed in, writing: the anon role must not be allowed to' });
         if (w.status < 400) throw new Error(`anonymous could write: HTTP ${w.status}`);
         return `read 1, write refused HTTP ${w.status}`;
       });

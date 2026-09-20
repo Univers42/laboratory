@@ -2,7 +2,7 @@
 // bridge: what the suite calls is exactly what the buttons call.
 import { ApiClient } from './client';
 import { cast as buildCast, ensureSession, CULTURES, type Culture } from './cultures';
-import { settings, setResult, setRunning, setView, results, log, isHostile } from './store';
+import { settings, setResult, setRunning, setView, results, log, isHostile, progress } from './store';
 import type { LabCtx, Probe, Result, Step } from './types';
 import { RULES } from '../probes/rules';
 
@@ -71,6 +71,26 @@ async function gatewayReady(api: ApiClient): Promise<Preflight> {
   return result;
 }
 
+// Every probe that is in flight, so Stop can reach it. A probe holds its
+// own AbortController; the map is what lets someone outside the run end it.
+const live = new Map<string, AbortController>();
+let stopping = false;
+
+/** end the current run: abort what is in flight and skip what is left */
+export function stopRun() {
+  stopping = true;
+  live.forEach((c) => c.abort());
+}
+
+export function isStopping(): boolean {
+  return stopping;
+}
+
+// A probe that never returns leaves the bench saying "Running…" with no way
+// out, which is indistinguishable from a broken page. Every probe gets a
+// deadline; the burst probe legitimately needs minutes, the rest do not.
+const DEADLINE_MS = 60_000;
+
 export async function runProbe(id: string, opts: { force?: boolean } = {}): Promise<Result> {
   const p = probeById(id);
   if (!p) throw new Error(`no probe ${id}`);
@@ -80,9 +100,18 @@ export async function runProbe(id: string, opts: { force?: boolean } = {}): Prom
   const t0 = performance.now();
   const steps: Step[] = [];
   const ac = new AbortController();
+  live.set(id, ac);
   setRunning(id, true);
+  let settled = false;
+  let deadline: ReturnType<typeof setTimeout> | undefined;
   const finish = (r: Omit<Result, 'id' | 'startedAt' | 'ms'>): Result => {
     const out: Result = { id, startedAt, ms: Math.round(performance.now() - t0), ...r };
+    // A probe abandoned at its deadline may still resolve later: the first
+    // verdict is the one that counts, or the late one would overwrite it.
+    if (settled) return out;
+    settled = true;
+    clearTimeout(deadline);
+    live.delete(id);
     setResult(out);
     setRunning(id, false);
     return out;
@@ -141,18 +170,42 @@ export async function runProbe(id: string, opts: { force?: boolean } = {}): Prom
         }
       }
     }
-    const out = (await p.run(ctx)) || {};
+    const budget = p.timeoutMs ?? DEADLINE_MS;
+    const out =
+      (await Promise.race([
+        p.run(ctx),
+        new Promise<never>((_, reject) => {
+          deadline = setTimeout(() => {
+            ac.abort();
+            reject(new Error(`gave up after ${Math.round(budget / 1000)} s: the probe never finished`));
+          }, budget);
+        }),
+      ])) || {};
     if (out.skipped) return finish({ ok: true, skipped: out.skipped, steps });
     const ok = out.ok ?? steps.every((x) => x.ok);
     return finish({ ok, steps, evidence: out.evidence });
   } catch (e) {
+    // Stop is not a failure: the person ended the run, so say that.
+    if (stopping) return finish({ ok: true, skipped: 'stopped before it finished', steps });
     return finish({ ok: false, steps, error: e instanceof Error ? e.message : String(e) });
   }
 }
 
 export async function runAll(): Promise<Result[]> {
   const out: Result[] = [];
-  for (const p of listProbes()) out.push(await runProbe(p.id));
+  const all = listProbes();
+  stopping = false;
+  progress.value = { done: 0, total: all.length, current: all[0]?.title || '' };
+  try {
+    for (const p of all) {
+      if (stopping) break;
+      progress.value = { done: out.length, total: all.length, current: p.title };
+      out.push(await runProbe(p.id));
+    }
+  } finally {
+    progress.value = null;
+    stopping = false;
+  }
   return out;
 }
 
@@ -193,6 +246,7 @@ declare global {
       list(): { id: string; group: string; title: string; needs: string[] }[];
       run(id: string, force?: boolean): Promise<Result>;
       runAll(): Promise<Result[]>;
+      stop(): void;
       results(): Record<string, Result>;
       log(): unknown[];
       views(): Record<string, unknown>;
@@ -212,6 +266,7 @@ export function installBridge(configure: (patch: Record<string, unknown>) => voi
     list: () => listProbes().map((p) => ({ id: p.id, group: p.group, title: p.title, needs: p.needs || [] })),
     run: (id, force) => runProbe(id, { force }),
     runAll,
+    stop: stopRun,
     results: () => results.value,
     log: () => log.value,
     views: () => views_(),

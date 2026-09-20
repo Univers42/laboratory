@@ -6,6 +6,9 @@ registerProbe({
   group: 'limits',
   title: 'The gateway pushes back',
   blurb: 'A burst against a route Kong limits to 300 a minute per address (the auth route allows 60000, which no browser can reach). Some must come back 429. It runs last: it throttles this address on that route, which nothing else uses, for up to a minute.',
+  // 700 requests at 60 in flight take about 30 s through the tailnet; the
+  // 60 s default deadline would cut a legitimate run in half.
+  timeoutMs: 180_000,
   knobs: [
     { key: 'route', label: 'route', type: 'select', options: ['/tmdb/v1/', '/search/v1/', '/api/', '/auth/v1/health'], default: '/tmdb/v1/', help: 'kong.yml: /tmdb/v1 and /search/v1 and /api are 300/min per IP; /auth/v1 is 60000/min' },
     { key: 'burst', label: 'requests', type: 'number', default: 700, help: 'more than twice the limit: Kong counts in fixed calendar minutes, and a burst that straddles the boundary splits across two windows' },
@@ -21,7 +24,7 @@ registerProbe({
       let sent = 0;
       while (sent < burst && !ctx.signal.aborted) {
         const n = Math.min(conc, burst - sent);
-        const rs = await Promise.all(Array.from({ length: n }, () => ctx.api.req(route, { signal: ctx.signal })));
+        const rs = await Promise.all(Array.from({ length: n }, () => ctx.api.req(route, { signal: ctx.signal, want: 'any', why: '429 is what this probe is looking for; this route has no upstream in this deployment, so what Kong does let through comes back 503' })));
         rs.forEach((r) => (hist[String(r.status)] = (hist[String(r.status)] || 0) + 1));
         sent += n;
         ctx.view({ hist: { ...hist }, sent, burst });

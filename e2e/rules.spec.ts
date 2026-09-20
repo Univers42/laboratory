@@ -13,6 +13,7 @@ type Rules = {
   isFullChangeOrder(t: string[]): boolean;
   sawRateLimit(h: Record<string, number>): boolean;
   socketRefused(o: { opened: boolean }): boolean;
+  closedCleanly(c: { code: number; wasClean: boolean }): boolean;
 };
 const rules = (page: import('@playwright/test').Page, call: (r: Rules) => unknown) =>
   page.evaluate(`(${call.toString()})(window.laboratory.rules)`);
@@ -50,4 +51,16 @@ test('a burst that met no limit did not test the limit', async ({ page }) => {
 test('a socket that opened was not refused, whatever else happened', async ({ page }) => {
   expect(await rules(page, (r) => r.socketRefused({ opened: false }))).toBe(true);
   expect(await rules(page, (r) => r.socketRefused({ opened: true }))).toBe(false);
+});
+
+test('a clean close is a handshake, not just a code', async ({ page }) => {
+  expect(await rules(page, (r) => r.closedCleanly({ code: 1000, wasClean: true }))).toBe(true);
+  // 1005 is "no status received", which the spec still calls clean
+  expect(await rules(page, (r) => r.closedCleanly({ code: 1005, wasClean: true }))).toBe(true);
+  // 1006 is the one the gateway used to send for a polite goodbye: the
+  // connection vanished without an answering Close frame
+  expect(await rules(page, (r) => r.closedCleanly({ code: 1006, wasClean: false }))).toBe(false);
+  expect(await rules(page, (r) => r.closedCleanly({ code: 1011, wasClean: false }))).toBe(false);
+  // and a 1000 that never completed the handshake is not clean either
+  expect(await rules(page, (r) => r.closedCleanly({ code: 1000, wasClean: false }))).toBe(false);
 });
