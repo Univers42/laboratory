@@ -35,20 +35,25 @@ export function Sidebar() {
         opt-in…" and "LET IN: a door open to any website" were both reported
         as errors on a page where nothing was skipped and no door was open.
         Each line now says what the dot means, in that order.
+
+        Naming the colours was worse: the skip dot is amber and the running
+        one is blue, so "amber = running now" sat next to a blue dot and was
+        read as a probe stuck running. The dot is right there -- it does not
+        need naming, and the palette changes with the theme anyway.
       */}
       <div class="legend" data-testid="legend">
         <div class="legend-title">what the dots mean</div>
         <span>
-          <i class="dot ok" /> green = {isHostile.value ? 'the platform refused this page, as it must' : 'the probe passed'}
+          <i class="dot ok" /> {isHostile.value ? 'the platform refused this page, as it must' : 'the probe passed'}
         </span>
         <span>
-          <i class="dot bad" /> red = {isHostile.value ? 'a door let this page in — open to any website' : 'the probe failed'}
+          <i class="dot bad" /> {isHostile.value ? 'a door let this page in — open to any website' : 'the probe failed'}
         </span>
         <span>
-          <i class="dot skip" /> grey = not run: it is opt-in, or the platform does not offer it
+          <i class="dot skip" /> not run: it is opt-in, or the platform does not offer it
         </span>
         <span>
-          <i class="dot run" /> amber = running now
+          <i class="dot run" /> running now (it pulses)
         </span>
       </div>
     </aside>
