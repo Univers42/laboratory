@@ -36,6 +36,9 @@ aside.side { border-right: 1px solid var(--line); overflow: auto; padding: 10px 
 .dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.skip { background: var(--warn); }
 .dot.run { background: var(--run); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
+.legend { margin: 14px 14px 4px; padding-top: 10px; border-top: 1px solid var(--line); display: grid; gap: 5px; font-size: 11px; color: var(--fg-3); }
+.legend span { display: flex; align-items: center; gap: 7px; }
+.legend i { display: inline-block; }
 main.canvas { overflow: auto; padding: 18px 22px; }
 .canvas h1 { margin: 0 0 4px; font-size: 20px; }
 .canvas .blurb { color: var(--fg-2); margin: 0 0 12px; }
