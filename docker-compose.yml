@@ -57,9 +57,14 @@ services:
       WAF_HOST: ${WAF_HOST}
     ports: ["127.0.0.1:${LAB_PORT:-5180}:80"]
     restart: unless-stopped
+  # The same image as lab, served on a second port so the gateway sees an
+  # origin it was never told to allow. It must not declare `build:` too: two
+  # services building one tag race inside buildkit and the loser aborts the
+  # whole `up` with `image "laboratory-lab:latest": already exists`, which is
+  # what every cold machine hit. depends_on makes lab build it first.
   hostile:
-    build: ./app
     image: laboratory-lab
+    depends_on: [lab]
     environment: *bench-env
     ports: ["127.0.0.1:${LAB_HOSTILE_PORT:-5181}:80"]
     restart: unless-stopped

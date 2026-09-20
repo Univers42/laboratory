@@ -2,7 +2,12 @@
 -include .env
 export
 SHELL := /bin/sh
-TS := $(shell docker compose ps -q tailscale 2>/dev/null)
+# Recursive on purpose. With `:=` this ran while make parsed the file, which on
+# a cold machine is before `up` has started the sidecar: TS came out empty, the
+# certificate recipe ran `docker run --network container:` with nothing after
+# the colon, and the pin was never written. `=` re-reads it at each use, and
+# every use is inside a recipe that runs after the sidecar is up.
+TS = $(shell docker compose ps -q tailscale 2>/dev/null)
 
 help:
 	@printf 'Laboratory -- the datacenter test bench\n\n'
@@ -17,7 +22,11 @@ help:
 	@printf 'no .env: cp .env.example .env && chmod 600 .env, then fill it in\n'; exit 1
 
 up: .env
-	docker compose up -d tailscale
+	# --wait, not a bare `up -d`: the next line reaches the WAF *through* the
+	# sidecar, and a sidecar that has started has not yet joined the tailnet.
+	# Without the wait a cold machine failed the pin with "could not fetch the
+	# WAF certificate", ~15 s before the tailnet was usable.
+	docker compose up -d --wait tailscale
 	$(MAKE) --no-print-directory relay/tls.conf
 	docker compose up -d --build
 	@$(MAKE) --no-print-directory status
