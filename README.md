@@ -65,6 +65,7 @@ Funnel URL and the tailnet directly.
 | Realtime | A row Ada writes reaches Linus | two sockets on `pg/lab_notes/*`: inserted, updated (old and new row), deleted by cascade, in order |
 | Realtime | Presence and cursors (broadcast) | two cultures join a `lab/bench/*` room with the publish-capable realtime token, each in the presence meta; cursors cross as broadcasts; the roster shrinks on untrack. Skipped with the reason without the token |
 | Realtime | Meet someone from another browser | heartbeat notes carry each page's cursor through the database and presence lives in the room; anyone else on the topic appears as a moving cursor. Alone, it summons a companion: the bench as the next culture in a hidden frame, a real second client. The Playwright "together" test runs it from two contexts |
+| Realtime | Sockets close with a handshake, not a drop | a socket closed politely must be answered politely: a Close frame back and code 1000, not the 1006 that means "the network died" |
 | Storage | A file goes in and comes back equal | bucket, PNG upload, listing, download with equal SHA-256, signed URL, delete |
 | Limits | The gateway pushes back | runs last: a burst on a route Kong limits to 300/min must meet 429s (the auth route allows 60000/min, out of a browser's reach) |
 | Engines | GraphQL door · Mongo door · The tenant you were issued | `{ __typename }` and a query on `lab_dishes` through pg_graphql; the Mongo door answers with the same key; a tenant key identifies the app at `/v1/tenants/me` |
@@ -164,6 +165,18 @@ VM's own clone) and, until that merges, carried by born2root's installer:
   behaviour, a handshake with no Origin header (a server-side client) is
   always allowed, and the comparison is the whole serialized origin so no
   suffix match can accept `app.example.com.evil.test`.
+- **Every WebSocket close was an abnormal one.** The gateway returned from
+  its read loop on the client's Close frame and dropped the socket without
+  answering, so all eight sockets in a bench run reported code **1006**
+  ("abnormal closure") for a goodbye the client had asked for politely --
+  indistinguishable, to an SDK, from the network dying, which is what drives
+  reconnect-with-backoff and an error in the log. RFC 6455 §5.5.1 requires
+  the answering Close frame. Fixed in `ws_handler`: the read side now says
+  *how* it ended, the writer (which owns the sink) sends the Close frame, and
+  when the write side ended first it hands the sink back so a client close is
+  still answered. Probe: **Sockets close with a handshake, not a drop**.
+  The bench was also closing on the same tick as its last broadcast, which
+  loses the handshake race on its own; it now lets the wire drain first.
 - Operational: the realtime service does not reconnect its Postgres LISTEN
   after the database container is recreated; restart it. grobase's own
   `make up` on a live stack re-resolves ports and moves the WAF.
