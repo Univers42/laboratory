@@ -6,7 +6,6 @@ import { settings, setResult, setRunning, setView, results, log, isHostile } fro
 import type { LabCtx, Probe, Result, Step } from './types';
 
 const REG: Probe[] = [];
-let schemaOk: boolean | undefined;
 
 export function registerProbe(p: Probe) {
   if (!REG.some((x) => x.id === p.id)) REG.push(p);
@@ -28,15 +27,40 @@ export function knobValue<T = string>(p: Probe, key: string): T {
   return (v === undefined ? spec?.default : v) as T;
 }
 
-async function schemaPresent(api: ApiClient): Promise<boolean> {
-  if (schemaOk !== undefined) return schemaOk;
-  const r = await api.req('/rest/v1/rpc/lab_ping', { method: 'POST', body: {} });
-  schemaOk = r.status === 200;
-  return schemaOk;
+type Preflight = { ok: true } | { ok: false; error: string };
+let preflight: { key: string; result: Preflight } | undefined;
+
+// One call to lab_ping can fail for three very different reasons, and telling
+// them apart is the difference between "apply the schema" and "the key in
+// your browser belongs to a grobase that no longer exists". The second wore
+// the first's message for a while: a whole bench went red pointing at the
+// database while the database was fine.
+function diagnose(status: number, text: string): Preflight {
+  if (status === 200) return { ok: true };
+  if (status === 0)
+    return {
+      ok: false,
+      error: `the gateway did not answer ${location.origin} -- network or CORS (${text.slice(0, 90)}); check "door" in the knobs, and that this origin is in the gateway's CORS list`,
+    };
+  if (status === 401 || status === 403)
+    return {
+      ok: false,
+      error: `the gateway refused the anon key (HTTP ${status}): it is invalid, expired, or from an earlier grobase. Press "forget my settings" in the knobs; if it persists, fix GROBASE_ANON_KEY in .env and re-run make up`,
+    };
+  if (status === 404 || /PGRST2\d\d/.test(text))
+    return { ok: false, error: 'bench schema missing: make -C born2root sql FILE=schema/001_grobase_bench.sql B2B_CONFIG=profiles/server.toml' };
+  return { ok: false, error: `the gateway answered HTTP ${status} to lab_ping: ${text.slice(0, 140)}` };
 }
 
-export function invalidateSchemaCheck() {
-  schemaOk = undefined;
+// Cached per (gateway, key) pair, so changing either in the knobs re-checks
+// without anything having to remember to invalidate it.
+async function gatewayReady(api: ApiClient): Promise<Preflight> {
+  const key = `${api.base}|${api.anonKey}`;
+  if (preflight?.key === key) return preflight.result;
+  const r = await api.req('/rest/v1/rpc/lab_ping', { method: 'POST', body: {} });
+  const result = diagnose(r.status, r.text || '');
+  preflight = { key, result };
+  return result;
 }
 
 export async function runProbe(id: string, opts: { force?: boolean } = {}): Promise<Result> {
@@ -91,8 +115,9 @@ export async function runProbe(id: string, opts: { force?: boolean } = {}): Prom
     if (needs.includes('cast2') && ctx.cast.length < 2) {
       return finish({ ok: true, skipped: 'needs a cast of two: raise "cast size" in the knobs', steps });
     }
-    if (needs.includes('schema') && !(await schemaPresent(api))) {
-      return finish({ ok: false, error: 'bench schema missing: make -C born2root sql FILE=schema/001_grobase_bench.sql', steps });
+    if (needs.includes('schema')) {
+      const pf = await gatewayReady(api);
+      if (!pf.ok) return finish({ ok: false, error: pf.error, steps });
     }
     if (needs.includes('auth') || needs.includes('cast2')) {
       for (const c of ctx.cast) {
@@ -100,7 +125,12 @@ export async function runProbe(id: string, opts: { force?: boolean } = {}): Prom
           const sess = await ensureSession(api, c);
           return sess.user.email;
         });
-        if (!ok) return finish({ ok: false, steps, error: `${c.name} could not sign in` });
+        if (!ok) {
+          // a failed sign-in is usually not about the password: ask the
+          // gateway what is actually wrong before blaming the culture.
+          const pf = await gatewayReady(api);
+          return finish({ ok: false, steps, error: pf.ok ? `${c.name} could not sign in` : pf.error });
+        }
       }
     }
     const out = (await p.run(ctx)) || {};

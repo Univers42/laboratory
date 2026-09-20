@@ -9,5 +9,11 @@ server {
         add_header Cache-Control "no-store";
         return 200 '{"labUrl":"${LAB_URL}","hostileUrl":"${LAB_HOSTILE_URL}","baseUrl":"${LAB_API_URL}","anonKey":"${GROBASE_ANON_KEY}","tenantKey":"${GROBASE_TENANT_KEY}","realtimeToken":"${GROBASE_REALTIME_TOKEN}","wafHost":"${WAF_HOST}"}';
     }
+    # The asset names are content-hashed, so they may be cached forever; the
+    # page that names them may not. Without this a rebuilt bench keeps serving
+    # yesterday's bundle from the browser cache, which looks exactly like the
+    # backend having broken.
+    location /assets/ { expires 1y; add_header Cache-Control "public, immutable"; }
+    location = /index.html { add_header Cache-Control "no-store"; }
     location / { try_files $uri /index.html; }
 }

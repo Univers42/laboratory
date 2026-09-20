@@ -149,6 +149,29 @@ in another tab, another browser, or on a teammate's machine running its own
 the rosters and cursors meet. Cultures have stable identities, so the same
 Linus signs in from every device.
 
+## When everything turns red at once
+
+Fourteen red dots almost never mean fourteen broken things. Look at the
+first probe's reason: the bench now names the difference between a gateway
+that cannot be reached from this origin, a gateway that *refuses the anon
+key*, and a schema that is genuinely missing. They used to share one
+message ("bench schema missing"), which is how a stale key in a browser
+sent two people reading SQL.
+
+The usual cause is the browser, not the platform: settings you change in
+the knobs are saved in `localStorage`, and until the bench told them apart
+a saved blob outlived the configuration it was saved against -- rebuild the
+VM, rotate `GROBASE_ANON_KEY`, and yesterday's key kept being sent. Now
+only the fields you actually overrode are kept, each next to the value the
+container had at the time; when the container's value moves, the override
+is dropped and an amber banner says which. The knobs mark every overridden
+field with **overridden ↺** (click it to follow `.env` again) and *forget
+my settings* drops the lot.
+
+If a probe is red after that, the reason under it is the platform talking:
+run `make status`, then the same call with `curl` through
+`http://localhost:5174` to see the body the browser was not allowed to read.
+
 ## Files
 
 - `docker-compose.yml`: `tailscale`, `relay`, `lab`, `hostile`, `e2e` (profile).

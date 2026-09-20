@@ -1,4 +1,4 @@
-import { settings, okCount, failCount, running, saveSettings, isHostile } from '../lab/store';
+import { settings, okCount, failCount, running, saveSettings, isHostile, overriddenKeys, droppedOverrides, resetSettings, configuredFromServer } from '../lab/store';
 import { runAll, slide } from '../lab/registry';
 import { cast } from '../lab/cultures';
 import { CultureBadge } from './CultureBadge';
@@ -22,7 +22,9 @@ export function Header() {
           <b>Laboratory</b>
           <span>grobase bench</span>
         </div>
-        <span class="gateway" title="the gateway every probe talks to">→ {s.baseUrl}</span>
+        <span class={'gateway' + (configuredFromServer.value.baseUrl && configuredFromServer.value.baseUrl !== s.baseUrl ? ' overridden' : '')} title="the gateway every probe talks to">
+          → {s.baseUrl}
+        </span>
         <CultureBadge c={me} extra="(this page)" />
         <div class="spacer" />
         <div class="counts">
@@ -51,6 +53,23 @@ export function Header() {
           {busy ? 'Running…' : 'Run all'}
         </button>
       </header>
+      {droppedOverrides.value.length ? (
+        <div class="notice warn" data-testid="dropped-banner">
+          The bench was reconfigured since you last changed things here ({droppedOverrides.value.join(', ')}). Those saved values are gone and the container's own configuration is in use
+          again — that is the fix for a bench where everything is suddenly red.
+          <button class="btn small" onClick={() => (droppedOverrides.value = [])}>
+            dismiss
+          </button>
+        </div>
+      ) : null}
+      {overriddenKeys.value.length ? (
+        <div class="notice" data-testid="override-banner">
+          You are overriding what this container configured: <b>{overriddenKeys.value.join(', ')}</b>. Probes use your values, not <code>.env</code>.
+          <button class="btn small" onClick={resetSettings} data-testid="use-container-values">
+            use the bench's values
+          </button>
+        </div>
+      ) : null}
       {isHostile.value ? (
         <div class="hostile-banner">
           This page is served from the <b>hostile origin</b> ({location.origin}), which is not in the gateway's CORS list. Every cross-origin probe here is expected to be refused by the browser: green means "blocked as expected".

@@ -1,6 +1,16 @@
-import { settings, saveSettings, setKnob, resetSettings, selected } from '../lab/store';
+import { settings, saveSettings, setKnob, resetSettings, selected, overrides, revertSetting } from '../lab/store';
 import { probeById, knobKey, knobValue } from '../lab/registry';
 import { CULTURES, myCultureId } from '../lab/cultures';
+
+/** a field the user typed over the container's configuration, and the way back */
+function Over({ k }: { k: string }) {
+  if (!(k in overrides.value)) return null;
+  return (
+    <button class="over" data-testid={'revert-' + k} title="this value overrides what the container configured; click to follow the container again" onClick={() => revertSetting(k)}>
+      overridden ↺
+    </button>
+  );
+}
 
 export function Knobs() {
   const s = settings.value;
@@ -20,7 +30,9 @@ export function Knobs() {
     <aside class="knobs" data-testid="knobs">
       <h3>Gateway</h3>
       <div class="field">
-        <label>door</label>
+        <label>
+          door <Over k="baseUrl" />
+        </label>
         <select value={presets.find((x) => x.url === s.baseUrl)?.url || ''} onChange={(e) => saveSettings({ baseUrl: (e.target as HTMLSelectElement).value })}>
           <option value="">custom…</option>
           {presets.map((x) => (
@@ -33,15 +45,21 @@ export function Knobs() {
         <span class="help">every probe talks to this origin; the browser origin stays {location.origin}</span>
       </div>
       <div class="field">
-        <label>anon key (apikey)</label>
+        <label>
+          anon key (apikey) <Over k="anonKey" />
+        </label>
         <input class="mono" type="password" value={s.anonKey} onChange={(e) => saveSettings({ anonKey: (e.target as HTMLInputElement).value.trim() })} />
       </div>
       <div class="field">
-        <label>tenant key (X-Baas-Api-Key)</label>
+        <label>
+          tenant key (X-Baas-Api-Key) <Over k="tenantKey" />
+        </label>
         <input class="mono" type="password" value={s.tenantKey} onChange={(e) => saveSettings({ tenantKey: (e.target as HTMLInputElement).value.trim() })} />
       </div>
       <div class="field">
-        <label>realtime token (presence, broadcast)</label>
+        <label>
+          realtime token (presence, broadcast) <Over k="realtimeToken" />
+        </label>
         <input class="mono" type="password" value={s.realtimeToken} onChange={(e) => saveSettings({ realtimeToken: (e.target as HTMLInputElement).value.trim() })} />
         <span class="help">from `make realtime_token` in born2root; user sessions cannot publish</span>
       </div>
@@ -105,9 +123,10 @@ export function Knobs() {
         </>
       ) : null}
       <h3>Reset</h3>
-      <button class="btn small" onClick={resetSettings}>
+      <button class="btn small" onClick={resetSettings} data-testid="forget-settings">
         forget my settings
       </button>
+      <span class="help">drops every override above and takes the gateway, keys and token this container was started with (.env)</span>
     </aside>
   );
 }
