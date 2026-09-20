@@ -1,0 +1,16 @@
+diff --git a/app/src/lab/registry.ts b/app/src/lab/registry.ts
+index 22fb919..d86ca19 100644
+--- a/app/src/lab/registry.ts
++++ b/app/src/lab/registry.ts
+@@ -43,10 +43,7 @@ function diagnose(status: number, text: string): Preflight {
+       error: `the gateway did not answer ${location.origin} -- network or CORS (${text.slice(0, 90)}); check "door" in the knobs, and that this origin is in the gateway's CORS list`,
+     };
+   if (status === 401 || status === 403)
+-    return {
+-      ok: false,
+-      error: `the gateway refused the anon key (HTTP ${status}): it is invalid, expired, or from an earlier grobase. Press "forget my settings" in the knobs; if it persists, fix GROBASE_ANON_KEY in .env and re-run make up`,
+-    };
++    return { ok: false, error: 'bench schema missing: make -C born2root sql FILE=schema/001_grobase_bench.sql B2B_CONFIG=profiles/server.toml' };
+   if (status === 404 || /PGRST2\d\d/.test(text))
+     return { ok: false, error: 'bench schema missing: make -C born2root sql FILE=schema/001_grobase_bench.sql B2B_CONFIG=profiles/server.toml' };
+   return { ok: false, error: `the gateway answered HTTP ${status} to lab_ping: ${text.slice(0, 140)}` };

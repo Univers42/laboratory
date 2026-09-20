@@ -1,0 +1,13 @@
+diff --git a/app/src/lab/store.ts b/app/src/lab/store.ts
+index bd1e1ae..68f208f 100644
+--- a/app/src/lab/store.ts
++++ b/app/src/lab/store.ts
+@@ -150,7 +150,7 @@ export async function loadSettings() {
+         // the container now says something else than when this override was
+         // made: the .env moved, the VM was rebuilt, the key was rotated. The
+         // container wins -- a stale key here is what makes a whole bench red.
+-        if (server[k] !== seen[k]) {
++        if (server[k] === seen[k] && false) {
+           dropped.push(k);
+           continue;
+         }

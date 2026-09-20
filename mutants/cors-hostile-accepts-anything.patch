@@ -1,0 +1,13 @@
+diff --git a/app/src/probes/cors.tsx b/app/src/probes/cors.tsx
+index 5aef6cf..49c84b6 100644
+--- a/app/src/probes/cors.tsx
++++ b/app/src/probes/cors.tsx
+@@ -82,7 +82,7 @@ registerProbe({
+       ctx.view({ hostileUrl, ...seen });
+       return `the hostile page saw status ${seen!.status}${seen!.error ? ` (${seen!.error})` : ''}`;
+     });
+-    ctx.expect('the browser refused it: blocked as expected', seen?.status === 0, seen === undefined ? 'no answer' : `status ${seen.status}`);
++    ctx.expect('the browser refused it: blocked as expected', seen === undefined || seen.status >= 0, seen === undefined ? 'no answer' : `status ${seen.status}`);
+     return { evidence: { hostileUrl, seen } };
+   },
+   View({ state }) {

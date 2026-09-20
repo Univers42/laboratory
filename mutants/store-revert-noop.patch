@@ -1,0 +1,13 @@
+diff --git a/app/src/lab/store.ts b/app/src/lab/store.ts
+index bd1e1ae..aafcee1 100644
+--- a/app/src/lab/store.ts
++++ b/app/src/lab/store.ts
+@@ -101,7 +101,7 @@ export function setKnob(key: string, value: string | number | boolean) {
+ /** drop one override and take the container's value for that field again */
+ export function revertSetting(key: string) {
+   const ov = { ...overrides.value };
+-  delete ov[key];
++  if (key === '') delete ov[key];
+   overrides.value = ov;
+   settings.value = { ...defaults, ...configuredFromServer.value, ...(ov as Partial<Settings>) };
+   persist();

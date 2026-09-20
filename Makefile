@@ -60,6 +60,9 @@ e2e: .env
 	@mkdir -p report
 	docker compose --profile e2e run --rm e2e
 
+mutants: ## break the bench on purpose and check the suite notices (~25 min)
+	sh mutants/run.sh $(ARGS)
+
 report:
 	@printf 'report/playwright/index.html\n'
 

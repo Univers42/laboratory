@@ -1,0 +1,13 @@
+diff --git a/app/src/lab/store.ts b/app/src/lab/store.ts
+index bd1e1ae..048407c 100644
+--- a/app/src/lab/store.ts
++++ b/app/src/lab/store.ts
+@@ -86,7 +86,7 @@ export function saveSettings(patch: Partial<Settings>) {
+     // typing the server's own value back in is not an override: it means
+     // "follow the container again", so the field goes back to the config.
+     if (isServerKey(k) && server[k] !== undefined && value === server[k]) delete ov[k];
+-    else ov[k] = value;
++    else if (!isServerKey(k)) ov[k] = value;
+   }
+   overrides.value = ov;
+   settings.value = next;

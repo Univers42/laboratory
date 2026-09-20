@@ -1,0 +1,13 @@
+diff --git a/app/src/lab/registry.ts b/app/src/lab/registry.ts
+index 22fb919..8f61089 100644
+--- a/app/src/lab/registry.ts
++++ b/app/src/lab/registry.ts
+@@ -129,7 +129,7 @@ export async function runProbe(id: string, opts: { force?: boolean } = {}): Prom
+           // a failed sign-in is usually not about the password: ask the
+           // gateway what is actually wrong before blaming the culture.
+           const pf = await gatewayReady(api);
+-          return finish({ ok: false, steps, error: pf.ok ? `${c.name} could not sign in` : pf.error });
++          return finish({ ok: false, steps, error: `${c.name} could not sign in` });
+         }
+       }
+     }

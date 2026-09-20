@@ -1,0 +1,13 @@
+diff --git a/app/src/lab/store.ts b/app/src/lab/store.ts
+index bd1e1ae..107556f 100644
+--- a/app/src/lab/store.ts
++++ b/app/src/lab/store.ts
+@@ -158,7 +158,7 @@ export async function loadSettings() {
+       }
+       ov[k] = v;
+     }
+-  } else if (raw) {
++  } else if (raw && false) {
+     // a v1 blob is a snapshot of everything, so there is no way to tell what
+     // the user chose from what was merely copied: none of it is trustworthy.
+     dropped.push('settings saved by an older Laboratory');

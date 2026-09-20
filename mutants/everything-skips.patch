@@ -1,0 +1,12 @@
+diff --git a/app/src/lab/registry.ts b/app/src/lab/registry.ts
+index 22fb919..0631172 100644
+--- a/app/src/lab/registry.ts
++++ b/app/src/lab/registry.ts
+@@ -106,6 +106,7 @@ export async function runProbe(id: string, opts: { force?: boolean } = {}): Prom
+   };
+   try {
+     const needs = p.needs || [];
++    if (needs.length >= 0) return finish({ ok: true, skipped: 'mutant: nothing was actually run', steps });
+     if (needs.includes('optIn') && !opts.force && !knobValue<boolean>(p, 'optIn')) {
+       return finish({ ok: true, skipped: 'opt-in: tick "I mean it" in the knobs, or run it alone', steps });
+     }

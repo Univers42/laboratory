@@ -1,0 +1,13 @@
+diff --git a/app/src/lab/client.ts b/app/src/lab/client.ts
+index 2fd44e0..f99a8a1 100644
+--- a/app/src/lab/client.ts
++++ b/app/src/lab/client.ts
+@@ -73,7 +73,7 @@ export class ApiClient {
+     const url = this.url(path);
+     const method = (o.method || 'GET').toUpperCase();
+     const headers: Record<string, string> = { ...(o.headers || {}) };
+-    if (!o.noKey) headers['apikey'] = this.anonKey;
++    if (!o.noKey && o.method !== undefined) headers['apikey'] = this.anonKey;
+     if (o.token) headers['Authorization'] = `Bearer ${o.token}`;
+     if (o.tenantKey) headers['X-Baas-Api-Key'] = o.tenantKey;
+     let body: BodyInit | undefined;
