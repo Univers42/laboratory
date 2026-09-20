@@ -49,6 +49,9 @@ CREATE POLICY lab_notes_insert ON public.lab_notes FOR INSERT
     WITH CHECK (author = auth.uid()
                 AND EXISTS (SELECT 1 FROM public.lab_dishes d
                             WHERE d.id = dish_id AND (d.is_public OR d.owner = auth.uid())));
+DROP POLICY IF EXISTS lab_notes_update ON public.lab_notes;
+CREATE POLICY lab_notes_update ON public.lab_notes FOR UPDATE
+    USING (author = auth.uid());
 DROP POLICY IF EXISTS lab_notes_delete ON public.lab_notes;
 CREATE POLICY lab_notes_delete ON public.lab_notes FOR DELETE
     USING (author = auth.uid());

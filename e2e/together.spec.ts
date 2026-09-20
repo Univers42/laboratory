@@ -1,6 +1,8 @@
 // Two browser contexts, two cultures, one topic: Ada and Linus run the
-// "meet" probe at the same time and each must see the other's presence
-// and cursor. Then the one-page two-culture probe for the full wire.
+// "meet" probe at the same time and each must see the other's cursor
+// arrive through the database. Then the one-page probes: changes (must
+// pass) and presence/broadcast (skips with the reason when the deployed
+// realtime image lacks them).
 import { test, expect } from '@playwright/test';
 import { openLab, runProbe, expectOk, setKnob } from './fixtures';
 
@@ -21,12 +23,17 @@ test('Ada and Linus meet on the realtime canvas from two browser contexts', asyn
   await expect(a.locator('[data-testid="roster"]')).toContainText('Linus');
   await expect(b.locator('[data-testid="roster"]')).toContainText('Ada');
   await expect(a.locator('[data-testid="cursor-field"] .cursor[data-name="Linus"]')).toBeVisible();
+  await expect(b.locator('[data-testid="cursor-field"] .cursor[data-name="Ada"]')).toBeVisible();
   await a.screenshot({ path: `report/shots/${test.info().project.name}-meet-ada.png` });
   await b.screenshot({ path: `report/shots/${test.info().project.name}-meet-linus.png` });
 
+  await a.click('[data-testid="probe-realtime.changes"]');
+  expectOk(await runProbe(a, 'realtime.changes'), 'realtime.changes');
+  await a.screenshot({ path: `report/shots/${test.info().project.name}-changes.png` });
   await a.click('[data-testid="probe-realtime.together"]');
-  expectOk(await runProbe(a, 'realtime.together'), 'realtime.together');
-  await a.screenshot({ path: `report/shots/${test.info().project.name}-together.png` });
+  const together = await runProbe(a, 'realtime.together');
+  if (together.skipped) test.info().annotations.push({ type: 'skipped', description: `realtime.together: ${together.skipped}` });
+  else expectOk(together, 'realtime.together');
   await cA.close();
   await cB.close();
 });

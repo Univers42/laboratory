@@ -1,6 +1,6 @@
 import { registerProbe } from '../lab/registry';
 import { ensureSession, signOutLocal, type Session } from '../lab/cultures';
-import { httpErr } from './util';
+import { httpErr, sleep } from './util';
 
 registerProbe({
   id: 'auth.lifecycle',
@@ -23,6 +23,9 @@ registerProbe({
       return r.json.email;
     });
     await ctx.step('refresh rotates the access token', async () => {
+      // GoTrue mints the JWT from (sub, iat, exp) at second granularity: a
+      // refresh within the same second as the sign-in returns the same bytes.
+      await sleep(1100);
       const r = await api.req<Session>('/auth/v1/token?grant_type=refresh_token', { method: 'POST', body: { refresh_token: sess!.refresh_token }, culture: me.id });
       if (r.status !== 200 || !r.json?.access_token) throw httpErr(r.status, r.text);
       const changed = r.json.access_token !== sess!.access_token;
@@ -39,8 +42,9 @@ registerProbe({
     await ctx.step('a tampered token is refused', async () => {
       const bad = sess!.access_token.slice(0, -4) + 'AAAA';
       const r = await api.req('/auth/v1/user', { token: bad, culture: me.id });
-      if (r.status !== 401) throw new Error(`expected 401, got HTTP ${r.status}`);
-      return 'HTTP 401';
+      // 401 from GoTrue; 403 when the gateway's jwt plugin rejects it first
+      if (r.status !== 401 && r.status !== 403) throw new Error(`expected 401 or 403, got HTTP ${r.status}`);
+      return `HTTP ${r.status}`;
     });
     await ctx.step('the database sees the same user (rpc lab_ping)', async () => {
       const r = await api.req<{ role: string; uid: string }>('/rest/v1/rpc/lab_ping', { method: 'POST', body: {}, token: sess!.access_token, culture: me.id });

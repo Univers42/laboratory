@@ -44,7 +44,7 @@ registerProbe({
       return `${r.data.byteLength} bytes, same hash`;
     });
     await ctx.step('a signed URL is issued', async () => {
-      const r = await api.req<{ signedUrl?: string; expiresAt?: string }>(`/storage/v1/sign/${bucket}/${key}`, { method: 'POST', body: { expiresIn: 120 }, token, culture: me.id });
+      const r = await api.req<{ signedUrl?: string; expiresAt?: string }>(`/storage/v1/sign/${bucket}/${key}`, { method: 'POST', body: { method: 'GET', expiresIn: 120 }, token, culture: me.id });
       if (!r.ok || !r.json?.signedUrl) throw httpErr(r.status, r.text);
       let host = r.json.signedUrl;
       try {

@@ -62,8 +62,9 @@ Funnel URL and the tailnet directly.
 | Auth | Sign up, sign in, refresh, sign out | the session life, plus the answers that must be "no": wrong password, tampered token, refresh after sign-out; `rpc lab_ping` sees the same uid |
 | Auth | The cast signs in | each culture holds its own session, distinct ids |
 | Data | Rows, filters, pages, and who may see them | CRUD, `select`/`order`, `Range` paging, RPC, and RLS: Linus sees nothing private, everything public, cannot write or delete Ada's rows; anonymous reads public only |
-| Realtime | Two cultures, one canvas | presence (each sees the other), a DB change crossing from Ada to Linus, cursors as broadcasts, roster shrinking on untrack |
-| Realtime | Meet someone from another browser | opt-in: this page waits for anyone else on the topic; the Playwright "together" test runs it from two contexts |
+| Realtime | A row Ada writes reaches Linus | two sockets on `pg/lab_notes/*`: inserted, updated (old and new row), deleted by cascade, in order |
+| Realtime | Presence and cursors (broadcast) | TRACK/BROADCAST between two cultures; skipped with the reason while the published realtime image ignores them (the source has them) |
+| Realtime | Meet someone from another browser | opt-in: heartbeat notes carry each page's cursor through the database; anyone else on the topic appears as a moving cursor; the Playwright "together" test runs it from two contexts |
 | Storage | A file goes in and comes back equal | bucket, PNG upload, listing, download with equal SHA-256, signed URL, delete |
 | Limits | The gateway pushes back | opt-in: a burst on the auth route must meet 429s |
 | Engines | GraphQL door · Mongo door · The tenant you were issued | the other doors answer with the same key; a tenant key identifies the app at `/v1/tenants/me` |

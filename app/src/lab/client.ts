@@ -167,6 +167,8 @@ export class RealtimeConn {
   private frames: ((f: Frame) => void)[] = [];
   topic = '';
   subId = '';
+  /** PRESENCE frames seen: zero after a TRACK means the server does not implement presence */
+  presenceFrames = 0;
   constructor(private readonly api: ApiClient) {}
 
   private log(note: string, ok = true, status = 101) {
@@ -231,6 +233,13 @@ export class RealtimeConn {
             this.log(`ERROR ${String(f.code)}: ${String(f.message)}`, false, 0);
             reject(new Error(`realtime: ${String(f.code)} ${String(f.message)}`));
             break;
+          case 'PRESENCE': {
+            // the server's presence snapshot: {type, topic, members:[{conn_id,user_id?,meta}]}
+            this.presenceFrames++;
+            const e: RtEvent = { kind: 'presence', topic: f.topic as string | undefined, type: 'presence', payload: { topic: f.topic, members: f.members }, raw: f };
+            this.handlers.forEach((h) => h(e));
+            break;
+          }
           case 'EVENT': {
             const ev = (f.event || {}) as Record<string, unknown>;
             const et = String(ev.event_type ?? ev.event ?? ev.type ?? '');
