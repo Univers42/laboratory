@@ -86,7 +86,7 @@ have in another tab.
 | Stranger | A real token does not buy a socket either | the handshake with the publish-capable realtime token in hand: the origin check has to come *before* authentication, because a leaked token is exactly what a stranger page would hold |
 | Stranger | What CORS does not stop: the request still goes out | a simple POST — no custom header, `text/plain` body — is sent by the browser without asking anyone and comes back opaque. CORS protects the answer, never the request; the bench's counterpart probe checks the platform refused it |
 
-![the stranger origin: three probes, every door refused](docs/shots/stranger.png)
+![the stranger origin: six probes, all twelve doors refused](docs/shots/stranger.png)
 
 Listing the lab's probes on that page instead produced twelve red dots that
 all meant "the gateway is working", which is how the one genuinely open door
@@ -232,10 +232,19 @@ not noise.
   *why* a probe failed, only that it did. `settings.spec.ts` now pins the
   three apart.
 
-The sweep after those two commits kills all sixteen — score **100%**, the
-table in `report/mutants.md`. That number means one thing only: for each of
-these sixteen behaviours, removing it turns the suite red. It is not a claim
+The last full sweep killed all seventeen — score **100%**, the table in
+`report/mutants.md`. That number means one thing only: for each of those
+seventeen behaviours, removing it turns the suite red. It is not a claim
 about behaviour nobody wrote a mutant for.
+
+Five more mutants are in `mutants/index.tsv` and have **not been swept yet**
+— the ones for the request log's new judgement (`log-grades-refusals-red`,
+`want-never-recorded`, `want-matches-anything`, `log-never-folds`) and for
+the close handshake (`close-1006-is-clean`). The sweep rebuilds the bench
+image once per mutant and takes about forty minutes, during which
+`localhost:5180` serves deliberately broken builds; run `sh mutants/run.sh`
+when nobody is looking at the bench. Until then the table's score covers
+seventeen behaviours, not twenty-two.
 
 `report/mutants.md` is the current table. A patch that no longer applies is
 reported STALE rather than scored: when the code it mutates moves, the mutant
