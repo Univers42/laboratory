@@ -15,3 +15,4 @@ env-dead-anon-key	env	smoke	the bench would stay green against a gateway that re
 env-wrong-gateway	env	smoke	the bench would stay green pointed at nothing
 env-no-realtime-token	env	together	presence and broadcast quietly skip instead of failing
 env-hostile-page	env	smoke	probes pass from an origin the gateway never allowed
+stranger-socket-accepts-open	code	rules	a realtime socket that opened to a stranger origin still reports refused
