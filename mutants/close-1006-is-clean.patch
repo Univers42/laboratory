@@ -1,0 +1,13 @@
+diff --git a/app/src/probes/rules.ts b/app/src/probes/rules.ts
+index b7f7c9f..4a16841 100644
+--- a/app/src/probes/rules.ts
++++ b/app/src/probes/rules.ts
+@@ -49,7 +49,7 @@ export function socketRefused(outcome: { opened: boolean }): boolean {
+  * 1000 is the completed handshake, 1005 is "no status", which is still clean.
+  */
+ export function closedCleanly(close: { code: number; wasClean: boolean }): boolean {
+-  return close.wasClean && (close.code === 1000 || close.code === 1005);
++  return close.code !== 0;
+ }
+ 
+ export const RULES = { blockedByBrowser, changeOrder, isFullChangeOrder, sawRateLimit, socketRefused, closedCleanly };

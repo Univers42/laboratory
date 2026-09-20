@@ -1,0 +1,13 @@
+diff --git a/app/src/ui/RequestLog.tsx b/app/src/ui/RequestLog.tsx
+index 7239152..eace78d 100644
+--- a/app/src/ui/RequestLog.tsx
++++ b/app/src/ui/RequestLog.tsx
+@@ -15,7 +15,7 @@ export const logOpen = signal(true);
+ // the probe -- including the case that used to be invisible: a request that
+ // wanted 401 and got 200 is a door standing open, and it is the loud one.
+ export function verdict(e: LogEntry, strangerOrigin: boolean): 'expected' | 'bad' | 'plain' {
+-  if (e.met === true) return 'expected';
++  if (e.met === true) return e.ok ? 'expected' : 'bad';
+   if (e.met === false) return 'bad';
+   if (!e.status && e.error && strangerOrigin) return 'expected';
+   return e.ok ? 'plain' : 'bad';

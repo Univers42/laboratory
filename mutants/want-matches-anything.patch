@@ -1,0 +1,12 @@
+diff --git a/app/src/lab/client.ts b/app/src/lab/client.ts
+index 781041e..f865f2c 100644
+--- a/app/src/lab/client.ts
++++ b/app/src/lab/client.ts
+@@ -29,6 +29,7 @@ export function wantLabel(w: Want): string {
+ 
+ export function wantMet(w: Want, status: number): boolean {
+   if (w === 'any') return true;
++  return true;
+   if (w === 'refused') return status === 0;
+   if (Array.isArray(w)) return w.includes(status);
+   return status === w;

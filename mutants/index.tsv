@@ -16,3 +16,8 @@ env-wrong-gateway	env	smoke	the bench would stay green pointed at nothing
 env-no-realtime-token	env	together	presence and broadcast quietly skip instead of failing
 env-hostile-page	env	smoke	probes pass from an origin the gateway never allowed
 stranger-socket-accepts-open	code	rules	a realtime socket that opened to a stranger origin still reports refused
+log-grades-refusals-red	code	log	a bench full of deliberate refusals reads as a platform on fire again
+want-never-recorded	code	log	the log says every request got what it wanted, including the ones that did not
+want-matches-anything	code	log	a probe that wants 401 and gets 200 is reported as satisfied -- an open door goes unseen
+log-never-folds	code	log	700 burst rows drown the log and evict everything else at the cap
+close-1006-is-clean	code	rules	a socket the server dropped counts as a polite goodbye (the grobase defect returns unseen)

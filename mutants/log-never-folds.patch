@@ -1,0 +1,13 @@
+diff --git a/app/src/lab/store.ts b/app/src/lab/store.ts
+index 1d19000..08631e8 100644
+--- a/app/src/lab/store.ts
++++ b/app/src/lab/store.ts
+@@ -188,7 +188,7 @@ const sameRow = (a: LogEntry, b: LogEntry) => a.method === b.method && a.url ===
+ 
+ export function pushLog(entry: LogEntry) {
+   const next = log.value.length >= 500 ? log.value.slice(-400) : log.value.slice();
+-  for (let i = next.length - 1; i >= 0 && i > next.length - 9; i--) {
++  for (let i = next.length - 1; i >= 0 && i > next.length - 1; i--) {
+     if (sameRow(next[i], entry)) {
+       next[i] = { ...next[i], count: (next[i].count || 1) + 1, ms: Math.max(next[i].ms, entry.ms) };
+       log.value = next;
