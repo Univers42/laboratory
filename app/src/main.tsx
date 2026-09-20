@@ -11,6 +11,27 @@ import { Canvas } from './ui/Canvas';
 import { Knobs } from './ui/Knobs';
 import { RequestLog, logOpen } from './ui/RequestLog';
 
+// ?auto=<probe id>: a companion frame. The same bench, loaded as another
+// culture in a hidden same-origin iframe, runs one probe on its own page
+// context (its own sockets, its own in-memory session) and reports the
+// result to the page that summoned it. This is how "Meet someone" always
+// has company, and it is a genuine second client as far as the platform
+// can tell.
+function Companion({ id }: { id: string }) {
+  useEffect(() => {
+    void (async () => {
+      const { runProbe } = await import('./lab/registry');
+      const r = await runProbe(id, { force: true });
+      window.parent?.postMessage({ lab: 'companion', id, ok: r.ok, skipped: r.skipped, steps: r.steps }, location.origin);
+    })();
+  }, [id]);
+  return (
+    <div class="embed">
+      companion {new URLSearchParams(location.search).get('culture')} running {id}…
+    </div>
+  );
+}
+
 // ?embed=cors: the hostile iframe. Same app, other origin: it makes one
 // cross-origin request and tells its parent what the browser let it see.
 function Embed() {
@@ -34,7 +55,9 @@ function Embed() {
 
 function App() {
   if (!configLoaded.value) return <div class="embed">loading…</div>;
-  if (new URLSearchParams(location.search).get('embed') === 'cors') return <Embed />;
+  const q = new URLSearchParams(location.search);
+  if (q.get('embed') === 'cors') return <Embed />;
+  if (q.get('auto')) return <Companion id={q.get('auto')!} />;
   return (
     <div class={'app' + (logOpen.value ? '' : ' log-collapsed')}>
       <Header />

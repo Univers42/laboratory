@@ -64,17 +64,18 @@ Funnel URL and the tailnet directly.
 | Data | Rows, filters, pages, and who may see them | CRUD, `select`/`order`, `Range` paging, RPC, and RLS: Linus sees nothing private, everything public, cannot write or delete Ada's rows; anonymous reads public only |
 | Realtime | A row Ada writes reaches Linus | two sockets on `pg/lab_notes/*`: inserted, updated (old and new row), deleted by cascade, in order |
 | Realtime | Presence and cursors (broadcast) | two cultures join a `lab/bench/*` room with the publish-capable realtime token, each in the presence meta; cursors cross as broadcasts; the roster shrinks on untrack. Skipped with the reason without the token |
-| Realtime | Meet someone from another browser | opt-in: heartbeat notes carry each page's cursor through the database; anyone else on the topic appears as a moving cursor; the Playwright "together" test runs it from two contexts |
+| Realtime | Meet someone from another browser | heartbeat notes carry each page's cursor through the database and presence lives in the room; anyone else on the topic appears as a moving cursor. Alone, it summons a companion: the bench as the next culture in a hidden frame, a real second client. The Playwright "together" test runs it from two contexts |
 | Storage | A file goes in and comes back equal | bucket, PNG upload, listing, download with equal SHA-256, signed URL, delete |
-| Limits | The gateway pushes back | opt-in: a burst on a route Kong limits to 300/min must meet 429s (the auth route allows 60000/min, out of a browser's reach) |
-| Engines | GraphQL door · Mongo door · The tenant you were issued | the other doors answer with the same key; a tenant key identifies the app at `/v1/tenants/me` |
+| Limits | The gateway pushes back | runs last: a burst on a route Kong limits to 300/min must meet 429s (the auth route allows 60000/min, out of a browser's reach) |
+| Engines | GraphQL door · Mongo door · The tenant you were issued | `{ __typename }` and a query on `lab_dishes` through pg_graphql; the Mongo door answers with the same key; a tenant key identifies the app at `/v1/tenants/me` |
 
 ## What it looks like
 
 ![the bench: probe tree, live canvas, knobs, request log](docs/shots/bench.png)
 
-Ada's page during a meeting with Linus from another browser, cursors
-arriving through the database:
+Ada's page during a meeting: left alone, the probe summons Linus in a
+hidden companion frame, a real second client; cursors arrive through the
+database and presence through the room:
 
 ![meet](docs/shots/meet.png)
 
@@ -88,42 +89,57 @@ refused, as it must.
 
 ![hostile origin](docs/shots/hostile-origin.png)
 
+GraphQL through pg_graphql, PostgREST, Kong and the WAF:
+
+![graphql](docs/shots/graphql.png)
+
 A burst against a limited route: 300 reach Kong's proxying, the rest get 429.
 
 ![limits](docs/shots/limits.png)
 
-## What the bench found on its first day (2026-09-20)
+## What the bench found on its first day (2026-09-20), and what it fixed
 
-Real platform behaviour, all reproduced through the WAF door and now
-either fixed in born2root's installer or reported here:
+Real platform behaviour, all reproduced through the WAF door. Each is now
+repaired in grobase itself (branch `fix/laboratory-findings`, made in the
+VM's own clone) and, until that merges, carried by born2root's installer:
 
 - **PATCH, PUT and DELETE were refused by the WAF** with an HTML 403 and
   no CORS headers (browsers see "status 0"). grobase ships a CRS override
-  widening the allowed methods, but the image's `setup.conf` never
-  includes it, so the CRS default (GET HEAD POST OPTIONS) applied; `image/png`
-  bodies were refused too. born2root's `install_grobase.sh` now sets the CRS
-  image's `ALLOWED_METHODS` / `ALLOWED_REQUEST_CONTENT_TYPE` on the WAF.
+  widening the allowed methods, but the image never includes it, so the
+  CRS default (GET HEAD POST OPTIONS) applied; `image/png` bodies were
+  refused too. Fixed with the CRS image's own `ALLOWED_METHODS` /
+  `ALLOWED_REQUEST_CONTENT_TYPE` in the WAF Dockerfile.
+- **GraphQL answered 406.** No pg_graphql in the Alpine Postgres image, no
+  `graphql_public` schema, PostgREST not exposing it. Fixed: pg_graphql is
+  compiled with pgrx in a stage of the Postgres Dockerfile, migration 087
+  creates the schema, the `graphql()` wrapper Kong's route calls and the
+  grants, and PostgREST exposes `public, graphql_public`.
+- **Then the WAF blocked every real GraphQL query**: CRS 932235 reads
+  `{ node { id } }` as a Unix command. grobase's `exclusions.conf` was empty
+  and never installed; it now holds one rule scoped to `/graphql/v1`, the
+  `json.query`/`json.variables` arguments and the rce/sqli families, installed
+  as `REQUEST-900-EXCLUSION-RULES-BEFORE-CRS.conf`.
 - **Realtime topics are `pg/<table>/<inserted|updated|deleted>`**, without
-  the schema; the JS SDK's default pattern (`pg/<schema>/<table>/*`)
-  never matches. The bench subscribes to `pg/lab_notes/*`.
-- **Presence and broadcast need a token GoTrue never issues.** The
-  realtime plane accepts TRACK and BROADCAST only from a JWT carrying
-  `can_publish: true` and a namespace grant; user sessions carry neither, so
-  the plane logs "Track denied (namespace)" and stays silent, SDK included.
-  born2root's `make realtime_token` now mints one in the guest, scoped to
-  the `pg` and `lab` namespaces, the way grobase's own seed does for its
-  game clients; the bench carries it as `GROBASE_REALTIME_TOKEN`. The
-  published `:latest` realtime image predates presence entirely; the VM
-  now runs the image tagged with the clone's commit.
+  the schema; the JS SDK's default pattern never matched. The SDK's
+  `defaultTopic` now keeps the table only (tests updated).
+- **Presence and broadcast need a token GoTrue never issues.** TRACK and
+  BROADCAST are accepted only from a JWT carrying `can_publish: true` and a
+  namespace grant; the plane logs "Track denied (namespace)" and stays silent,
+  SDK included. born2root's `make realtime_token` mints one in the guest,
+  scoped to `pg` and `lab`, the way grobase's own seed does for its game
+  clients; the bench carries it as `GROBASE_REALTIME_TOKEN`. The compose
+  also pinned a Docker Hub realtime image that predates presence; it now
+  uses the ghcr image CI builds.
 - **The auth route allows 60,000 requests a minute per address**, not
   300; the 300/min limits sit on the tmdb, search and hypertube routes.
-  Kong counts in fixed calendar minutes (a burst straddling the boundary
-  never trips it) and, with `policy: local`, per Kong node.
-- `/v1/tenants/me` takes the tenant key as `Authorization: Bearer`, not
-  `X-Baas-Api-Key`; `/storage/v1/sign` wants the `method` it signs for; a
-  refresh in the same second as sign-in returns a byte-identical JWT.
-- `/graphql/v1` answers 406: PostgREST exposes no graphql schema in this
-  image.
+  Kong counts in fixed calendar minutes and, with `policy: local`, per node.
+- Observability (prometheus, grafana, loki) published on 0.0.0.0 while
+  everything else binds loopback; `/v1/tenants/me` takes the tenant key as
+  `Authorization: Bearer`; `/storage/v1/sign` wants the `method` it signs
+  for; a refresh in the same second as sign-in returns a byte-identical JWT.
+- Operational: the realtime service does not reconnect its Postgres LISTEN
+  after the database container is recreated; restart it. grobase's own
+  `make up` on a live stack re-resolves ports and moves the WAF.
 
 ## Playing together
 

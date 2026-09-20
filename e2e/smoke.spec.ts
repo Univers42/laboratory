@@ -9,7 +9,6 @@ test('every probe passes on the lab origin', async ({ page }) => {
   const probes = await listProbes(page);
   expect(probes.length).toBeGreaterThan(8);
   for (const p of probes) {
-    if (p.needs.includes('optIn')) continue;
     await test.step(p.id, async () => {
       await page.click(`[data-testid="probe-${p.id}"]`);
       const r = await runProbe(page, p.id, false);

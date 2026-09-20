@@ -253,9 +253,14 @@ registerProbe({
   id: 'realtime.meet',
   group: 'realtime',
   title: 'Meet someone from another browser',
-  blurb: 'This page joins the topic as its own culture and writes a heartbeat note carrying its cursor every second into the shared "meet" dish. Anyone else doing the same, from any browser or laptop, shows up here as a moving cursor: realtime through the database, no broadcast needed. Opt-in because alone it waits in vain.',
-  needs: ['auth', 'optIn'],
-  knobs: [TOPIC_KNOB, ROOM_KNOB, { key: 'optIn', label: 'I have (or will have) company', type: 'toggle', default: false }, { key: 'waitMs', label: 'wait for company (ms)', type: 'number', default: 25000 }],
+  blurb: 'This page joins the topic as its own culture and writes a heartbeat note carrying its cursor every second into the shared "meet" dish; with the realtime token it also tracks presence in the room. Anyone else doing the same, from any browser or laptop, shows up as a moving cursor. Left alone, it summons a companion: the bench loaded as the next culture in a hidden frame, a real second client with its own session and sockets.',
+  needs: ['auth'],
+  knobs: [
+    TOPIC_KNOB,
+    ROOM_KNOB,
+    { key: 'companion', label: 'summon a companion when nobody comes', type: 'toggle', default: true, help: 'off: wait for a real person on ?culture=<name> elsewhere' },
+    { key: 'waitMs', label: 'wait for company (ms)', type: 'number', default: 25000 },
+  ],
   View: CanvasView,
   async run(ctx) {
     const { api, me } = ctx;
@@ -301,6 +306,7 @@ registerProbe({
       push();
     });
     let dishId = '';
+    let frame: HTMLIFrameElement | undefined;
     try {
       await ctx.step(`${me.name} subscribes to ${topic}`, () => conn.open({ token, topic, culture: me.id }));
       if (room) await ctx.step(`${me.name} joins ${roomTopic} with presence (realtime token)`, () => room.open({ token: ctx.settings.realtimeToken, topic: roomTopic, presenceMeta: { culture: me.id, name: me.name, user: me.session!.user.id }, culture: me.id }));
@@ -316,6 +322,18 @@ registerProbe({
         dishId = c.json[0].id;
         return `created ${dishId}`;
       });
+      const q = new URLSearchParams(location.search);
+      const amCompanion = !!q.get('auto');
+      if (ctx.knob<boolean>('companion') && !amCompanion) {
+        const next = CULTURES.find((c) => c.id !== me.id)!;
+        await ctx.step(`summon ${next.name} in a hidden companion frame`, async () => {
+          frame = document.createElement('iframe');
+          frame.style.cssText = 'position:fixed;width:1px;height:1px;bottom:0;right:0;opacity:0;pointer-events:none';
+          frame.src = `${location.origin}/?culture=${next.id}&auto=realtime.meet`;
+          document.body.appendChild(frame);
+          return `${location.origin}/?culture=${next.id}&auto=realtime.meet`;
+        });
+      }
       await ctx.step('someone else shows up (their heartbeats reach this page)', async () => {
         const total = Math.max(3000, Number(ctx.knob<number>('waitMs')) || 25000);
         const t0 = performance.now();
@@ -337,10 +355,11 @@ registerProbe({
         return `met ${[...others].map((o) => cultureById(o)?.name || o).join(', ')} · ${theirBeats} of their heartbeats · ${i} of mine`;
       });
       ctx.expect('presence roster (with the realtime token)', !room || present.size > 1 || others.size > 0, room ? `present: ${[...present].join(', ') || 'only me'} · ${room.presenceFrames} presence frame(s)` : 'no realtime token: roster built from heartbeats');
-      return { evidence: { topic, roomTopic, met: [...others], present: [...present], theirBeats, presenceFrames: room?.presenceFrames ?? 0 } };
+      return { evidence: { topic, roomTopic, met: [...others], present: [...present], theirBeats, presenceFrames: room?.presenceFrames ?? 0, companion: !!frame } };
     } finally {
       conn.close();
       room?.close();
+      if (frame) setTimeout(() => frame?.remove(), 6000);
       if (dishId) await api.req(`/rest/v1/lab_notes?dish_id=eq.${dishId}&author=eq.${me.session!.user.id}`, { method: 'DELETE', token, culture: me.id });
     }
   },

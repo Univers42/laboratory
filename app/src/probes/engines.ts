@@ -5,13 +5,18 @@ registerProbe({
   id: 'engines.graphql',
   group: 'engines',
   title: 'GraphQL door',
-  blurb: 'POST /graphql/v1 with the smallest query there is. The gateway must route it; whether pg_graphql is bundled decides if it executes.',
+  blurb: 'POST /graphql/v1: the smallest query there is, then a real one on the bench table. pg_graphql behind PostgREST, through the gateway.',
   async run(ctx) {
-    const r = await ctx.api.req<{ data?: unknown; errors?: unknown }>('/graphql/v1', { method: 'POST', body: { query: '{ __typename }' } });
+    const r = await ctx.api.req<{ data?: { __typename?: string }; errors?: unknown }>('/graphql/v1', { method: 'POST', body: { query: '{ __typename }' } });
     ctx.expect('the door answers', r.status !== 0, r.status === 0 ? r.text : `HTTP ${r.status}`);
-    if (r.status === 404 || r.status === 406 || r.status === 501) return { skipped: `the route answers HTTP ${r.status}: PostgREST exposes no graphql schema (pg_graphql is not bundled in this grobase image)` };
-    ctx.expect('the query executes', r.status === 200 && !!r.json?.data, `HTTP ${r.status} ${r.text.slice(0, 100)}`);
-    return { evidence: { status: r.status, body: r.json } };
+    ctx.expect('{ __typename } executes (pg_graphql behind PostgREST)', r.status === 200 && r.json?.data?.__typename === 'Query', `HTTP ${r.status} ${r.text.slice(0, 120)}`);
+    const q = await ctx.api.req<{ data?: { lab_dishesCollection?: { edges: unknown[] } }; errors?: unknown }>('/graphql/v1', {
+      method: 'POST',
+      body: { query: '{ lab_dishesCollection(first: 3) { edges { node { id name is_public } } } }' },
+    });
+    const edges = q.json?.data?.lab_dishesCollection?.edges;
+    ctx.expect('a query on lab_dishes returns rows (public ones, as anon)', q.status === 200 && Array.isArray(edges), `HTTP ${q.status} ${Array.isArray(edges) ? `${edges.length} edge(s)` : q.text.slice(0, 120)}`);
+    return { evidence: { typename: r.json?.data, dishes: q.json?.data ?? q.json?.errors } };
   },
 });
 
