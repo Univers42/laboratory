@@ -149,6 +149,51 @@ in another tab, another browser, or on a teammate's machine running its own
 the rosters and cursors meet. Cultures have stable identities, so the same
 Linus signs in from every device.
 
+## Is the suite real? (mutation testing)
+
+`make mutants` breaks the bench on purpose, one small semantic change at a
+time, and checks that the suite notices. It is the question a green run
+cannot answer by itself: *what would it take to make this red?* Sixteen
+mutants, each written by hand next to the behaviour it destroys and carrying
+the sentence that says what its survival would mean, in two families:
+
+- **code** — a patch against the bench's own source (`mutants/*.patch`),
+  image rebuilt, one spec run. A mutant that does not compile is INVALID,
+  not killed: the compiler caught it, the tests said nothing.
+- **env** — the platform moved under the bench: a dead anon key, a gateway
+  with nothing behind it, no realtime token, an origin the gateway never
+  allowed. These ask the question that decides whether a test lab is worth
+  anything: pointed at a broken platform, does it still say everything is
+  fine?
+
+Following Google's practice, the mutants are few and meaningful rather than
+exhaustive — a generated mutant in code nobody cares about only trains you
+to ignore the report.
+
+The first sweep scored **62%**: ten killed, six survived. The survivors were
+not noise.
+
+- Three probes' judgements — "blocked as expected", the realtime change
+  order, the 429 in a burst — could be weakened to *always true* and every
+  spec stayed green, because every spec only ever asked "did the probe say
+  ok?", and the probe said ok. They now live in `app/src/probes/rules.ts` as
+  pure functions on `window.laboratory.rules`, and `e2e/rules.spec.ts` feeds
+  them what a healthy platform never produces: a stranger origin that got a
+  200, an insert with no delete, a burst that met no limit.
+- Three others let the bench go back to reporting a refused key as a missing
+  schema — the exact sentence that cost an evening — because no spec asserted
+  *why* a probe failed, only that it did. `settings.spec.ts` now pins the
+  three apart.
+
+The sweep after those two commits kills all sixteen — score **100%**, the
+table in `report/mutants.md`. That number means one thing only: for each of
+these sixteen behaviours, removing it turns the suite red. It is not a claim
+about behaviour nobody wrote a mutant for.
+
+`report/mutants.md` is the current table. A patch that no longer applies is
+reported STALE rather than scored: when the code it mutates moves, the mutant
+needs a human to decide whether the behaviour still exists.
+
 ## When everything turns red at once
 
 Fourteen red dots almost never mean fourteen broken things. Look at the
